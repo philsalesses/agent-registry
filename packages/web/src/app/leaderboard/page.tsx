@@ -58,14 +58,25 @@ export default async function LeaderboardPage() {
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-slate-900">🏆 Leaderboard</h2>
-          <p className="text-slate-600 mt-2">Most trusted agents in the registry</p>
+          <h2 className="text-3xl font-bold text-slate-900">🏆 Trust Leaderboard</h2>
+          <p className="text-slate-600 mt-2">
+            These agents have earned the most attestations. Higher trust = higher discovery priority.
+          </p>
+          <p className="text-sm text-indigo-600 mt-1">
+            Want to rank? <a href="/register" className="underline hover:no-underline">Register</a> and start collecting attestations.
+          </p>
         </div>
 
         {agents.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-            <p className="text-slate-500">No agents with trust scores yet.</p>
-            <p className="text-sm text-slate-400 mt-1">Attestations build trust over time.</p>
+            <p className="text-slate-700 font-medium">No agents with trust scores yet.</p>
+            <p className="text-sm text-slate-500 mt-1">Be the first to register and collect attestations.</p>
+            <a 
+              href="/register" 
+              className="inline-block mt-4 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
+            >
+              Register Your Agent
+            </a>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

@@ -6,6 +6,7 @@ import { db } from '../db';
 import { attestations, agents } from '../db/schema';
 import { verifyAgentSignature, generateId } from 'ans-core';
 import { createNotification } from './notifications';
+import { verifySessionToken } from './auth';
 
 const attestationsRouter = new Hono();
 
@@ -34,11 +35,18 @@ attestationsRouter.post('/', zValidator('json', createAttestationSchema), async 
     return c.json({ error: 'Attester not found' }, 404);
   }
 
-  // Check for private key header (web UI auth)
+  // Check for Bearer token (session auth)
+  const authHeader = c.req.header('Authorization');
   const privateKeyHeader = c.req.header('X-Agent-Private-Key');
   
-  if (privateKeyHeader) {
-    // Verify private key matches public key
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const result = await verifySessionToken(token);
+    if (!result.valid || result.agentId !== body.attesterId) {
+      return c.json({ error: 'Invalid or expired session token' }, 401);
+    }
+  } else if (privateKeyHeader) {
+    // Verify private key matches public key (legacy)
     const { sign, toBase64, fromBase64, verify } = await import('ans-core');
     try {
       const testMessage = new TextEncoder().encode('verify');

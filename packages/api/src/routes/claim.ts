@@ -3,7 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
-import { agents } from '../db/schema';
+import { agents, agentCapabilities } from '../db/schema';
 import { generateKeypair, toBase64, generateId, verifyAgentSignature } from 'ans-core';
 
 const claimRouter = new Hono();
@@ -17,6 +17,12 @@ const webRegisterSchema = z.object({
   type: z.enum(['assistant', 'autonomous', 'tool', 'service']).default('assistant'),
   description: z.string().max(500).optional(),
   operatorName: z.string().optional(),
+  capabilities: z.array(z.string()).optional(),
+  linkedProfiles: z.object({
+    moltbook: z.string().optional(),
+    github: z.string().optional(),
+    twitter: z.string().optional(),
+  }).optional(),
 });
 
 claimRouter.post('/register', zValidator('json', webRegisterSchema), async (c) => {
@@ -35,12 +41,25 @@ claimRouter.post('/register', zValidator('json', webRegisterSchema), async (c) =
     type: body.type,
     description: body.description,
     operatorName: body.operatorName,
+    linkedProfiles: body.linkedProfiles || {},
     metadata: { 
       claimTokenHash: await hashToken(claimToken),
       verified: true,
       verifiedAt: new Date().toISOString(),
     },
   }).returning();
+
+  // Add capabilities if provided
+  if (body.capabilities && body.capabilities.length > 0) {
+    await Promise.all(body.capabilities.map(async (capId) => {
+      const id = generateId('ac_', 16);
+      await db.insert(agentCapabilities).values({
+        id,
+        agentId,
+        capabilityId: capId,
+      });
+    }));
+  }
 
   // Return credentials - USER MUST SAVE THESE
   return c.json({

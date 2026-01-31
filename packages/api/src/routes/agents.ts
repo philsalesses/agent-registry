@@ -6,6 +6,7 @@ import { db } from '../db';
 import { agents, attestations } from '../db/schema';
 import { generateId, verifyAgentSignature } from 'ans-core';
 import { validatePaymentMethods, isValidUrl, sanitizeString } from '../utils/validation';
+import { verifySessionToken } from './auth';
 
 /**
  * Compute trust score for an agent
@@ -130,7 +131,7 @@ agentsRouter.post('/', zValidator('json', registerSchema), async (c) => {
   return c.json({ ...agent, trustScore: 0 }, 201);
 });
 
-// Get agent by ID (includes trust score)
+// Get agent by ID (includes trust score and capabilities)
 agentsRouter.get('/:id', async (c) => {
   const id = c.req.param('id');
   
@@ -148,7 +149,21 @@ agentsRouter.get('/:id', async (c) => {
   // Check if verified
   const isVerified = (agent.metadata as any)?.verified === true;
 
-  return c.json({ ...agent, trustScore, verified: isVerified });
+  // Get capabilities
+  const capabilities = await db.query.agentCapabilities.findMany({
+    where: eq(agentCapabilities.agentId, id),
+  });
+
+  return c.json({ 
+    ...agent, 
+    trustScore, 
+    verified: isVerified,
+    capabilities: capabilities.map(c => ({
+      id: c.capabilityId,
+      trustScore: c.trustScore,
+      verified: c.verified,
+    })),
+  });
 });
 
 // Update agent
@@ -161,6 +176,13 @@ const updateSchema = z.object({
   homepage: z.string().url().optional(),
   tags: z.array(z.string()).optional(),
   operatorName: z.string().optional(),
+  linkedProfiles: z.object({
+    moltbook: z.string().optional(),
+    github: z.string().optional(),
+    twitter: z.string().optional(),
+    discord: z.string().optional(),
+    website: z.string().optional(),
+  }).optional(),
   paymentMethods: z.array(z.object({
     type: z.enum(['bitcoin', 'lightning', 'ethereum', 'usdc', 'other']),
     address: z.string(),
@@ -178,9 +200,18 @@ agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
   const signature = c.req.header('X-Agent-Signature');
   const timestamp = c.req.header('X-Agent-Timestamp');
   const privateKeyHeader = c.req.header('X-Agent-Private-Key');
+  const authHeader = c.req.header('Authorization');
   
-  // Method 1: Signed request (SDK)
-  if (signature && timestamp) {
+  // Method 1: Session token (Bearer)
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const result = await verifySessionToken(token);
+    if (!result.valid || result.agentId !== id) {
+      return c.json({ error: 'Invalid or expired session token' }, 401);
+    }
+  }
+  // Method 2: Signed request (SDK)
+  else if (signature && timestamp) {
     const rawBody = JSON.stringify(body);
     const isValid = await verifyAgentRequest(
       id,
@@ -194,7 +225,7 @@ agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
       return c.json({ error: 'Invalid signature' }, 401);
     }
   }
-  // Method 2: Private key verification (Web UI - temporary)
+  // Method 3: Private key verification (Web UI - legacy fallback)
   else if (privateKeyHeader && timestamp) {
     const agent = await db.query.agents.findFirst({
       where: eq(agents.id, id),
@@ -222,7 +253,7 @@ agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
   // No auth provided - REJECT
   else {
     return c.json({ 
-      error: 'Authentication required. Use SDK with private key or upload credentials in web UI.',
+      error: 'Authentication required. Use session token, SDK signature, or upload credentials.',
       docs: 'https://github.com/philsalesses/agent-registry#authentication'
     }, 401);
   }
@@ -418,6 +449,160 @@ agentsRouter.post('/:id/transfer', zValidator('json', transferSchema), async (c)
     trustScore,
     message: 'Ownership transferred successfully. Save your new credentials!'
   });
+});
+
+// =============================================================================
+// Agent Capabilities
+// =============================================================================
+
+import { agentCapabilities } from '../db/schema';
+import { and } from 'drizzle-orm';
+
+// Get agent's capabilities
+agentsRouter.get('/:id/capabilities', async (c) => {
+  const id = c.req.param('id');
+
+  const results = await db.query.agentCapabilities.findMany({
+    where: eq(agentCapabilities.agentId, id),
+  });
+
+  return c.json({ 
+    agentId: id,
+    capabilities: results.map(r => ({
+      id: r.capabilityId,
+      endpoint: r.endpoint,
+      trustScore: r.trustScore,
+      verified: r.verified,
+      addedAt: r.createdAt,
+    })),
+  });
+});
+
+// Add a capability to agent
+const addCapabilitySchema = z.object({
+  capabilityId: z.string().min(1).max(64),
+  endpoint: z.string().url().optional(),
+});
+
+agentsRouter.post('/:id/capabilities', zValidator('json', addCapabilitySchema), async (c) => {
+  const id = c.req.param('id');
+  const body = c.req.valid('json');
+
+  // Check auth
+  const authHeader = c.req.header('Authorization');
+  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
+  const timestamp = c.req.header('X-Agent-Timestamp');
+  
+  // Bearer token
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const result = await verifySessionToken(token);
+    if (!result.valid || result.agentId !== id) {
+      return c.json({ error: 'Invalid or expired session token' }, 401);
+    }
+  }
+  // Private key
+  else if (privateKeyHeader && timestamp) {
+    const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
+    if (!agent) return c.json({ error: 'Agent not found' }, 404);
+    
+    const { sign, fromBase64, verify } = await import('ans-core');
+    try {
+      const testMessage = new TextEncoder().encode('verify');
+      const privateKey = fromBase64(privateKeyHeader);
+      const sig = await sign(testMessage, privateKey);
+      const publicKey = fromBase64(agent.publicKey);
+      const isValid = await verify(sig, testMessage, publicKey);
+      if (!isValid) return c.json({ error: 'Invalid private key' }, 401);
+    } catch {
+      return c.json({ error: 'Invalid private key format' }, 401);
+    }
+  }
+  else {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  // Check if already has this capability
+  const existing = await db.query.agentCapabilities.findFirst({
+    where: and(
+      eq(agentCapabilities.agentId, id),
+      eq(agentCapabilities.capabilityId, body.capabilityId)
+    ),
+  });
+
+  if (existing) {
+    return c.json({ error: 'Agent already has this capability' }, 409);
+  }
+
+  const capId = generateId('ac_', 16);
+  const [added] = await db.insert(agentCapabilities).values({
+    id: capId,
+    agentId: id,
+    capabilityId: body.capabilityId,
+    endpoint: body.endpoint,
+  }).returning();
+
+  return c.json({
+    success: true,
+    capability: {
+      id: added.capabilityId,
+      endpoint: added.endpoint,
+      trustScore: added.trustScore,
+      verified: added.verified,
+    },
+  }, 201);
+});
+
+// Remove a capability from agent
+agentsRouter.delete('/:id/capabilities/:capabilityId', async (c) => {
+  const id = c.req.param('id');
+  const capabilityId = c.req.param('capabilityId');
+
+  // Check auth
+  const authHeader = c.req.header('Authorization');
+  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
+  const timestamp = c.req.header('X-Agent-Timestamp');
+  
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const result = await verifySessionToken(token);
+    if (!result.valid || result.agentId !== id) {
+      return c.json({ error: 'Invalid or expired session token' }, 401);
+    }
+  }
+  else if (privateKeyHeader && timestamp) {
+    const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
+    if (!agent) return c.json({ error: 'Agent not found' }, 404);
+    
+    const { sign, fromBase64, verify } = await import('ans-core');
+    try {
+      const testMessage = new TextEncoder().encode('verify');
+      const privateKey = fromBase64(privateKeyHeader);
+      const sig = await sign(testMessage, privateKey);
+      const publicKey = fromBase64(agent.publicKey);
+      const isValid = await verify(sig, testMessage, publicKey);
+      if (!isValid) return c.json({ error: 'Invalid private key' }, 401);
+    } catch {
+      return c.json({ error: 'Invalid private key format' }, 401);
+    }
+  }
+  else {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  // Delete the capability
+  const deleted = await db.delete(agentCapabilities)
+    .where(and(
+      eq(agentCapabilities.agentId, id),
+      eq(agentCapabilities.capabilityId, capabilityId)
+    ))
+    .returning();
+
+  if (deleted.length === 0) {
+    return c.json({ error: 'Capability not found for this agent' }, 404);
+  }
+
+  return c.json({ success: true, removed: capabilityId });
 });
 
 export { agentsRouter };

@@ -1,66 +1,35 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/lib/useAuth';
+import SignInCard from '@/app/components/SignInCard';
+import SessionBadge from '@/app/components/SessionBadge';
+import AgentSearch from '@/app/components/AgentSearch';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
-interface Credentials {
-  agentId: string;
-  publicKey: string;
-  privateKey: string;
+interface Agent {
+  id: string;
+  name: string;
+  type: string;
+  description?: string;
+  trustScore?: number;
+  avatar?: string;
 }
 
 export default function AttestPage() {
-  const [credentials, setCredentials] = useState<Credentials | null>(null);
-  const [subjectId, setSubjectId] = useState('');
-  const [subjectAgent, setSubjectAgent] = useState<any>(null);
+  const auth = useAuth();
+  const [subjectAgent, setSubjectAgent] = useState<Agent | null>(null);
   const [claimType, setClaimType] = useState<'behavior' | 'capability'>('behavior');
   const [trustScore, setTrustScore] = useState(75);
   const [capabilityId, setCapabilityId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      const creds = JSON.parse(text) as Credentials;
-      
-      if (!creds.agentId || !creds.publicKey || !creds.privateKey) {
-        throw new Error('Invalid credentials file');
-      }
-
-      setCredentials(creds);
-      setError('');
-    } catch (e: any) {
-      setError('Failed to load credentials: ' + e.message);
-    }
-  };
-
-  const lookupAgent = async () => {
-    if (!subjectId.trim()) return;
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${API_URL}/v1/agents/${subjectId}`);
-      if (!res.ok) throw new Error('Agent not found');
-      const agent = await res.json();
-      setSubjectAgent(agent);
-    } catch (e: any) {
-      setError(e.message);
-      setSubjectAgent(null);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const createAttestation = async () => {
-    if (!credentials || !subjectAgent) return;
+    if (!auth.session || !subjectAgent) return;
     setLoading(true);
     setError('');
     setSuccess('');
@@ -71,24 +40,19 @@ export default function AttestPage() {
         : { type: 'capability' as const, capabilityId, value: true };
 
       const payload = {
-        attesterId: credentials.agentId,
+        attesterId: auth.session.agent.id,
         subjectId: subjectAgent.id,
         claim,
+        signature: 'session-auth', // Signature not needed with Bearer token
       };
-
-      const timestamp = Date.now().toString();
 
       const res = await fetch(`${API_URL}/v1/attestations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Agent-Timestamp': timestamp,
-          'X-Agent-Private-Key': credentials.privateKey,
+          ...auth.getAuthHeaders(),
         },
-        body: JSON.stringify({
-          ...payload,
-          signature: 'signed-via-header',
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -97,7 +61,6 @@ export default function AttestPage() {
       }
 
       setSuccess(`Successfully attested to ${subjectAgent.name}!`);
-      setSubjectId('');
       setSubjectAgent(null);
     } catch (e: any) {
       setError(e.message);
@@ -106,6 +69,14 @@ export default function AttestPage() {
     }
   };
 
+  if (auth.loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
+        <p className="text-slate-500">Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
@@ -113,67 +84,37 @@ export default function AttestPage() {
           <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
             ← Back to ANS
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">Create Attestation</h1>
-          <p className="text-sm text-slate-600">Vouch for another agent's capabilities or behavior</p>
+          <h1 className="text-2xl font-bold text-slate-900 mt-2">Attest Another Agent</h1>
+          <p className="text-sm text-slate-600">Trust is built through vouches. Your attestations shape the agent economy.</p>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
-        {/* Load Your Credentials */}
-        {!credentials && (
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Step 1: Load Your Credentials</h2>
-            <p className="text-sm text-slate-600 mb-4">
-              You need to prove your identity to create attestations.
-            </p>
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full px-4 py-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
-            >
-              📁 Upload credentials file
-            </button>
-
-            {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
-          </div>
+        {/* Sign In */}
+        {!auth.isAuthenticated && (
+          <SignInCard 
+            auth={auth}
+            title="Sign In to Build Trust"
+            description="Attestations require cryptographic proof of identity. Upload your credentials to vouch for agents you've worked with."
+          />
         )}
 
         {/* Create Attestation */}
-        {credentials && (
+        {auth.isAuthenticated && auth.session && (
           <div className="space-y-6">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm">
-              <p className="text-sm font-medium text-emerald-900">
-                ✓ Attesting as <strong>{credentials.agentId}</strong>
-              </p>
-            </div>
+            <SessionBadge session={auth.session} onSignOut={auth.signOut} />
 
             {/* Find Agent */}
             <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Step 2: Find Agent to Attest</h2>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={subjectId}
-                  onChange={(e) => setSubjectId(e.target.value)}
-                  placeholder="ag_xxxxxxxxxxxxx"
-                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                />
-                <button
-                  onClick={lookupAgent}
-                  disabled={loading}
-                  className="px-5 py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  Lookup
-                </button>
-              </div>
+              <h2 className="text-lg font-semibold text-slate-900 mb-2">Find Agent to Attest</h2>
+              <p className="text-sm text-slate-600 mb-4">
+                Search by name or paste an agent ID
+              </p>
+              <AgentSearch 
+                onSelect={setSubjectAgent}
+                placeholder="Search agents by name..."
+                excludeId={auth.session.agent.id}
+              />
             </div>
 
             {/* Agent Found */}
@@ -181,13 +122,25 @@ export default function AttestPage() {
               <>
                 <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-sm">
-                      {subjectAgent.name.charAt(0).toUpperCase()}
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-sm overflow-hidden">
+                      {subjectAgent.avatar ? (
+                        <img src={subjectAgent.avatar} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        subjectAgent.name.charAt(0).toUpperCase()
+                      )}
                     </div>
                     <div>
                       <h3 className="font-semibold text-slate-900">{subjectAgent.name}</h3>
                       <p className="text-sm text-slate-500">{subjectAgent.type} • Trust: {subjectAgent.trustScore || 0}</p>
                     </div>
+                    <button
+                      onClick={() => setSubjectAgent(null)}
+                      className="ml-auto text-slate-400 hover:text-slate-600"
+                    >
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                   {subjectAgent.description && (
                     <p className="text-sm text-slate-600">{subjectAgent.description}</p>
@@ -196,7 +149,7 @@ export default function AttestPage() {
 
                 {/* Attestation Type */}
                 <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                  <h2 className="text-lg font-semibold text-slate-900 mb-4">Step 3: What are you attesting?</h2>
+                  <h2 className="text-lg font-semibold text-slate-900 mb-4">What are you attesting?</h2>
                   
                   <div className="space-y-4">
                     <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 hover:border-slate-300 transition-colors">
@@ -299,12 +252,12 @@ export default function AttestPage() {
 
         {/* Info */}
         <div className="mt-8 bg-indigo-50 border border-indigo-100 rounded-xl p-6">
-          <h3 className="font-semibold text-indigo-900">What are attestations?</h3>
+          <h3 className="font-semibold text-indigo-900">Why attestations matter</h3>
           <ul className="text-sm text-indigo-800 mt-3 space-y-2 list-disc list-inside">
-            <li>Attestations are cryptographically signed vouches</li>
-            <li>They build an agent's reputation over time</li>
-            <li>Your attestation is public and tied to your identity</li>
-            <li>Only attest for agents you've actually worked with</li>
+            <li><strong>Trust scores are everything.</strong> Agents with high scores get discovered first.</li>
+            <li><strong>Your reputation is on the line.</strong> Attestations are signed with your key and publicly visible.</li>
+            <li><strong>Only vouch for agents you've worked with.</strong> False attestations damage your own trust score.</li>
+            <li><strong>This is how we build the web of trust.</strong> Every honest attestation strengthens the network.</li>
           </ul>
         </div>
       </main>

@@ -6,14 +6,27 @@ import { db } from '../db';
 import { messages, agents } from '../db/schema';
 import { generateId } from 'ans-core';
 import { createNotification } from './notifications';
+import { verifySessionToken } from './auth';
 
 const messagesRouter = new Hono();
 
 /**
  * Verify agent authentication
  * Returns the agent ID if authenticated, null otherwise
+ * Supports: Bearer token (preferred), private key + agent ID
  */
 async function verifyAgentAuth(c: any): Promise<string | null> {
+  // Method 1: Bearer token (session)
+  const authHeader = c.req.header('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const result = await verifySessionToken(token);
+    if (result.valid && result.agentId) {
+      return result.agentId;
+    }
+  }
+
+  // Method 2: Private key + Agent ID (legacy)
   const privateKeyHeader = c.req.header('X-Agent-Private-Key');
   const agentId = c.req.header('X-Agent-Id');
   

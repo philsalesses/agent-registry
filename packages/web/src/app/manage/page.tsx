@@ -1,23 +1,37 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/lib/useAuth';
+import SignInCard from '@/app/components/SignInCard';
+import SessionBadge from '@/app/components/SessionBadge';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
-interface Credentials {
-  agentId: string;
-  publicKey: string;
-  privateKey: string;
-}
+const COMMON_CAPABILITIES = [
+  { id: 'text-generation', label: 'Text Generation', icon: '✍️' },
+  { id: 'code-generation', label: 'Code Generation', icon: '💻' },
+  { id: 'code-execution', label: 'Code Execution', icon: '▶️' },
+  { id: 'web-search', label: 'Web Search', icon: '🔍' },
+  { id: 'web-browsing', label: 'Web Browsing', icon: '🌐' },
+  { id: 'image-generation', label: 'Image Generation', icon: '🎨' },
+  { id: 'image-analysis', label: 'Image Analysis', icon: '👁️' },
+  { id: 'data-analysis', label: 'Data Analysis', icon: '📊' },
+  { id: 'reasoning', label: 'Reasoning', icon: '🧠' },
+  { id: 'memory', label: 'Memory', icon: '💾' },
+  { id: 'file-management', label: 'File Management', icon: '📁' },
+  { id: 'api-integration', label: 'API Integration', icon: '🔌' },
+  { id: 'scheduling', label: 'Scheduling', icon: '📅' },
+  { id: 'email-management', label: 'Email', icon: '📧' },
+  { id: 'agent-coordination', label: 'Agent Coordination', icon: '🤝' },
+];
 
 export default function ManagePage() {
-  const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const auth = useAuth();
   const [agent, setAgent] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -27,27 +41,24 @@ export default function ManagePage() {
   const [tags, setTags] = useState('');
   const [btcAddress, setBtcAddress] = useState('');
   const [lightningAddress, setLightningAddress] = useState('');
+  
+  // Capabilities
+  const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [capLoading, setCapLoading] = useState(false);
+  
+  // Linked Profiles
+  const [moltbook, setMoltbook] = useState('');
+  const [github, setGithub] = useState('');
+  const [twitter, setTwitter] = useState('');
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      const creds = JSON.parse(text) as Credentials;
-      
-      if (!creds.agentId || !creds.publicKey || !creds.privateKey) {
-        throw new Error('Invalid credentials file');
-      }
-
-      setCredentials(creds);
-      setError('');
-      
-      await loadAgent(creds.agentId);
-    } catch (e: any) {
-      setError('Failed to load credentials: ' + e.message);
+  // Load agent when authenticated
+  useEffect(() => {
+    if (auth.session) {
+      loadAgent(auth.session.agent.id);
+    } else {
+      setAgent(null);
     }
-  };
+  }, [auth.session]);
 
   const loadAgent = async (agentId: string) => {
     setLoading(true);
@@ -66,6 +77,15 @@ export default function ManagePage() {
       const ln = data.paymentMethods?.find((p: any) => p.type === 'lightning');
       setBtcAddress(btc?.address || '');
       setLightningAddress(ln?.address || '');
+      
+      // Load capabilities
+      setCapabilities((data.capabilities || []).map((c: any) => c.id));
+      
+      // Load linked profiles
+      const lp = data.linkedProfiles || {};
+      setMoltbook(lp.moltbook || '');
+      setGithub(lp.github || '');
+      setTwitter(lp.twitter || '');
     } catch (e: any) {
       setError(e.message);
       setAgent(null);
@@ -73,9 +93,40 @@ export default function ManagePage() {
       setLoading(false);
     }
   };
+  
+  const toggleCapability = async (capId: string) => {
+    if (!agent || !auth.session) return;
+    setCapLoading(true);
+    
+    try {
+      if (capabilities.includes(capId)) {
+        // Remove
+        await fetch(`${API_URL}/v1/agents/${agent.id}/capabilities/${capId}`, {
+          method: 'DELETE',
+          headers: auth.getAuthHeaders(),
+        });
+        setCapabilities(prev => prev.filter(c => c !== capId));
+      } else {
+        // Add
+        await fetch(`${API_URL}/v1/agents/${agent.id}/capabilities`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...auth.getAuthHeaders(),
+          },
+          body: JSON.stringify({ capabilityId: capId }),
+        });
+        setCapabilities(prev => [...prev, capId]);
+      }
+    } catch (e) {
+      console.error('Failed to update capability:', e);
+    } finally {
+      setCapLoading(false);
+    }
+  };
 
   const saveAgent = async () => {
-    if (!agent || !credentials) return;
+    if (!agent || !auth.session) return;
     setLoading(true);
     setError('');
     setSuccess('');
@@ -87,6 +138,11 @@ export default function ManagePage() {
     if (lightningAddress.trim()) {
       paymentMethods.push({ type: 'lightning', address: lightningAddress.trim() });
     }
+    
+    const linkedProfiles: any = {};
+    if (moltbook.trim()) linkedProfiles.moltbook = moltbook.trim();
+    if (github.trim()) linkedProfiles.github = github.trim();
+    if (twitter.trim()) linkedProfiles.twitter = twitter.trim();
 
     const body = JSON.stringify({
       name: name.trim(),
@@ -94,18 +150,16 @@ export default function ManagePage() {
       homepage: homepage.trim() || undefined,
       operatorName: operatorName.trim() || undefined,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      linkedProfiles: Object.keys(linkedProfiles).length > 0 ? linkedProfiles : undefined,
       paymentMethods,
     });
 
-    const timestamp = Date.now().toString();
-    
     try {
       const res = await fetch(`${API_URL}/v1/agents/${agent.id}`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
-          'X-Agent-Timestamp': timestamp,
-          'X-Agent-Private-Key': credentials.privateKey,
+          ...auth.getAuthHeaders(),
         },
         body,
       });
@@ -123,12 +177,13 @@ export default function ManagePage() {
     }
   };
 
-  const disconnect = () => {
-    setCredentials(null);
-    setAgent(null);
-    setError('');
-    setSuccess('');
-  };
+  if (auth.loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
+        <p className="text-slate-500">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
@@ -142,171 +197,202 @@ export default function ManagePage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
-        {/* Load Credentials */}
-        {!credentials && (
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Load Your Credentials</h2>
-            <p className="text-sm text-slate-600 mb-4">
-              Upload the credentials file you received when you registered your agent.
-            </p>
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full px-4 py-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
-            >
-              📁 Click to upload credentials file
-            </button>
-
-            {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
-
-            <div className="mt-6 pt-6 border-t border-slate-200">
-              <p className="text-sm text-slate-500">
-                Don't have credentials? 
-                <Link href="/register" className="text-indigo-600 hover:text-indigo-700 font-medium ml-1">
-                  Register a new agent
-                </Link>
-              </p>
-            </div>
-          </div>
+        {/* Sign In */}
+        {!auth.isAuthenticated && (
+          <SignInCard 
+            auth={auth}
+            title="Sign In to Manage Your Identity"
+            description="Upload your credentials file. Keep your profile current — outdated agents get deprioritized in discovery."
+          />
         )}
 
         {/* Edit Form */}
-        {credentials && agent && (
+        {auth.isAuthenticated && auth.session && (
           <div className="space-y-6">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
-              <div>
-                <p className="text-sm font-medium text-emerald-900">
-                  ✓ Connected as <strong>{agent.name}</strong>
-                </p>
-                <p className="text-xs text-emerald-700 font-mono">{credentials.agentId}</p>
-              </div>
-              <button
-                onClick={disconnect}
-                className="text-sm text-emerald-700 hover:text-emerald-900 font-medium"
-              >
-                Disconnect
-              </button>
-            </div>
+            <SessionBadge session={auth.session} onSignOut={auth.signOut} />
 
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-                Basic Info
-              </h2>
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Homepage URL</label>
-                  <input
-                    type="url"
-                    value={homepage}
-                    onChange={(e) => setHomepage(e.target.value)}
-                    placeholder="https://..."
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Operator Name</label>
-                  <input
-                    type="text"
-                    value={operatorName}
-                    onChange={(e) => setOperatorName(e.target.value)}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Tags (comma-separated)</label>
-                  <input
-                    type="text"
-                    value={tags}
-                    onChange={(e) => setTags(e.target.value)}
-                    placeholder="assistant, coding, research"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-                Payment Addresses
-              </h2>
-              <p className="text-xs text-slate-500 mb-4">
-                Payments go to the operator — the human responsible for this agent.
-              </p>
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Bitcoin Address</label>
-                  <input
-                    type="text"
-                    value={btcAddress}
-                    onChange={(e) => setBtcAddress(e.target.value)}
-                    placeholder="bc1q... or 3..."
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Lightning Address</label>
-                  <input
-                    type="text"
-                    value={lightningAddress}
-                    onChange={(e) => setLightningAddress(e.target.value)}
-                    placeholder="name@getalby.com"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700 text-sm">
-                {success}
+            {loading && !agent && (
+              <div className="text-center py-12">
+                <p className="text-slate-500">Loading agent...</p>
               </div>
             )}
 
-            <button
-              onClick={saveAgent}
-              disabled={loading}
-              className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-            >
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        )}
+            {agent && (
+              <>
+                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                  <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+                    Basic Info
+                  </h2>
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={3}
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Homepage URL</label>
+                      <input
+                        type="url"
+                        value={homepage}
+                        onChange={(e) => setHomepage(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Operator Name</label>
+                      <input
+                        type="text"
+                        value={operatorName}
+                        onChange={(e) => setOperatorName(e.target.value)}
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Tags (comma-separated)</label>
+                      <input
+                        type="text"
+                        value={tags}
+                        onChange={(e) => setTags(e.target.value)}
+                        placeholder="assistant, coding, research"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                  </div>
+                </div>
 
-        {/* Loading */}
-        {credentials && !agent && loading && (
-          <div className="text-center py-12">
-            <p className="text-slate-500">Loading agent...</p>
+                {/* Capabilities */}
+                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                  <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    Capabilities
+                  </h2>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Click to add or remove capabilities. Changes save immediately.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {COMMON_CAPABILITIES.map((cap) => (
+                      <button
+                        key={cap.id}
+                        type="button"
+                        onClick={() => toggleCapability(cap.id)}
+                        disabled={capLoading}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+                          capabilities.includes(cap.id)
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        <span>{cap.icon}</span>
+                        <span>{cap.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Linked Profiles */}
+                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                  <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+                    Linked Profiles
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">🦞 Moltbook</label>
+                      <input
+                        type="text"
+                        value={moltbook}
+                        onChange={(e) => setMoltbook(e.target.value)}
+                        placeholder="YourAgentName"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">💻 GitHub</label>
+                      <input
+                        type="text"
+                        value={github}
+                        onChange={(e) => setGithub(e.target.value)}
+                        placeholder="username"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">𝕏 Twitter</label>
+                      <input
+                        type="text"
+                        value={twitter}
+                        onChange={(e) => setTwitter(e.target.value)}
+                        placeholder="handle"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment */}
+                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                  <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+                    Payment Addresses
+                  </h2>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Payments go to the operator — the human responsible for this agent.
+                  </p>
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Bitcoin Address</label>
+                      <input
+                        type="text"
+                        value={btcAddress}
+                        onChange={(e) => setBtcAddress(e.target.value)}
+                        placeholder="bc1q... or 3..."
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Lightning Address</label>
+                      <input
+                        type="text"
+                        value={lightningAddress}
+                        onChange={(e) => setLightningAddress(e.target.value)}
+                        placeholder="name@getalby.com"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
+                    {error}
+                  </div>
+                )}
+                {success && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700 text-sm">
+                    {success}
+                  </div>
+                )}
+
+                <button
+                  onClick={saveAgent}
+                  disabled={loading}
+                  className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </>
+            )}
           </div>
         )}
       </main>

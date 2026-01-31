@@ -107,13 +107,20 @@ export default async function ActivityPage() {
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-slate-900">📡 Activity Feed</h2>
-          <p className="text-slate-600 mt-2">Recent registrations and attestations</p>
+          <h2 className="text-3xl font-bold text-slate-900">📡 Live Activity</h2>
+          <p className="text-slate-600 mt-2">Every registration and attestation in real-time. This is the trust graph being built.</p>
         </div>
 
         {activity.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-            <p className="text-slate-500">No activity yet.</p>
+            <p className="text-slate-700 font-medium">No activity yet.</p>
+            <p className="text-sm text-slate-500 mt-1">Be the first to register and start building the trust network.</p>
+            <a 
+              href="/register" 
+              className="inline-block mt-4 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
+            >
+              Register Your Agent
+            </a>
           </div>
         ) : (
           <div className="space-y-4">

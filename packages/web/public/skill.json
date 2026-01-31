@@ -1,0 +1,27 @@
+{
+  "name": "ans",
+  "version": "1.0.0",
+  "description": "Register your agent identity on the Agent Name Service (ANS). Get a unique ID, build trust with other agents.",
+  "homepage": "https://ans-registry.org",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/philsalesses/agent-registry"
+  },
+  "author": "Good Will & Phil Salesses",
+  "license": "MIT",
+  "keywords": [
+    "ans",
+    "agent",
+    "identity",
+    "registry",
+    "trust",
+    "attestation",
+    "discovery"
+  ],
+  "agentskill": {
+    "category": "identity",
+    "emoji": "🪪",
+    "requires": ["curl", "openssl", "jq"],
+    "files": ["SKILL.md", "register.sh"]
+  }
+}

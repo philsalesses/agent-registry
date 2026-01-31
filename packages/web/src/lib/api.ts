@@ -1,5 +1,19 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
+export interface AgentCapability {
+  id: string;
+  trustScore: number;
+  verified: boolean;
+}
+
+export interface LinkedProfiles {
+  moltbook?: string;
+  github?: string;
+  twitter?: string;
+  discord?: string;
+  website?: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -13,6 +27,9 @@ export interface Agent {
   tags: string[];
   operatorId?: string;
   operatorName?: string;
+  linkedProfiles?: LinkedProfiles;
+  verificationTier?: number;
+  capabilities?: AgentCapability[];
   paymentMethods: {
     type: string;
     address: string;
@@ -120,6 +137,11 @@ export async function getAgentCardEmbed(agentId: string, style: string = 'flat')
   return res.json();
 }
 
+// Auth helpers
+export function getAuthHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
+}
+
 // Notifications
 export interface Notification {
   id: string;
@@ -131,8 +153,7 @@ export interface Notification {
 }
 
 export async function getNotifications(
-  agentId: string,
-  privateKey: string,
+  token: string,
   options?: { limit?: number; offset?: number; unread?: boolean }
 ): Promise<{ notifications: Notification[]; unreadCount: number }> {
   const params = new URLSearchParams();
@@ -141,44 +162,32 @@ export async function getNotifications(
   if (options?.unread) params.set('unread', 'true');
 
   const res = await fetch(`${API_URL}/v1/notifications?${params}`, {
-    headers: {
-      'X-Agent-Id': agentId,
-      'X-Agent-Private-Key': privateKey,
-    },
+    headers: getAuthHeaders(token),
   });
   if (!res.ok) throw new Error('Failed to get notifications');
   return res.json();
 }
 
-export async function getNotificationCount(agentId: string, privateKey: string): Promise<{ unreadCount: number }> {
+export async function getNotificationCount(token: string): Promise<{ unreadCount: number }> {
   const res = await fetch(`${API_URL}/v1/notifications/count`, {
-    headers: {
-      'X-Agent-Id': agentId,
-      'X-Agent-Private-Key': privateKey,
-    },
+    headers: getAuthHeaders(token),
   });
   if (!res.ok) throw new Error('Failed to get notification count');
   return res.json();
 }
 
-export async function markNotificationRead(notificationId: string, agentId: string, privateKey: string): Promise<void> {
+export async function markNotificationRead(notificationId: string, token: string): Promise<void> {
   const res = await fetch(`${API_URL}/v1/notifications/${notificationId}/read`, {
     method: 'PATCH',
-    headers: {
-      'X-Agent-Id': agentId,
-      'X-Agent-Private-Key': privateKey,
-    },
+    headers: getAuthHeaders(token),
   });
   if (!res.ok) throw new Error('Failed to mark notification as read');
 }
 
-export async function markAllNotificationsRead(agentId: string, privateKey: string): Promise<void> {
+export async function markAllNotificationsRead(token: string): Promise<void> {
   const res = await fetch(`${API_URL}/v1/notifications/read-all`, {
     method: 'PATCH',
-    headers: {
-      'X-Agent-Id': agentId,
-      'X-Agent-Private-Key': privateKey,
-    },
+    headers: getAuthHeaders(token),
   });
   if (!res.ok) throw new Error('Failed to mark all notifications as read');
 }
@@ -198,15 +207,13 @@ export interface Message {
 export async function sendMessage(
   toAgentId: string,
   content: string,
-  agentId: string,
-  privateKey: string
+  token: string
 ): Promise<Message> {
   const res = await fetch(`${API_URL}/v1/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Agent-Id': agentId,
-      'X-Agent-Private-Key': privateKey,
+      ...getAuthHeaders(token),
     },
     body: JSON.stringify({ toAgentId, content }),
   });
@@ -218,8 +225,7 @@ export async function sendMessage(
 }
 
 export async function getMessages(
-  agentId: string,
-  privateKey: string,
+  token: string,
   options?: { view?: 'inbox' | 'sent' | 'all'; limit?: number; offset?: number }
 ): Promise<{ messages: Message[] }> {
   const params = new URLSearchParams();
@@ -228,21 +234,15 @@ export async function getMessages(
   if (options?.offset) params.set('offset', String(options.offset));
 
   const res = await fetch(`${API_URL}/v1/messages?${params}`, {
-    headers: {
-      'X-Agent-Id': agentId,
-      'X-Agent-Private-Key': privateKey,
-    },
+    headers: getAuthHeaders(token),
   });
   if (!res.ok) throw new Error('Failed to get messages');
   return res.json();
 }
 
-export async function getMessage(messageId: string, agentId: string, privateKey: string): Promise<Message> {
+export async function getMessage(messageId: string, token: string): Promise<Message> {
   const res = await fetch(`${API_URL}/v1/messages/${messageId}`, {
-    headers: {
-      'X-Agent-Id': agentId,
-      'X-Agent-Private-Key': privateKey,
-    },
+    headers: getAuthHeaders(token),
   });
   if (!res.ok) throw new Error('Failed to get message');
   return res.json();

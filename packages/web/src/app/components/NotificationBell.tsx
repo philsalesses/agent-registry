@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
+const STORAGE_KEY = 'ans_session';
 
 interface Notification {
   id: string;
@@ -14,37 +15,47 @@ interface Notification {
   createdAt: string;
 }
 
+interface Session {
+  token: string;
+  agent: { id: string; name: string };
+  expiresAt: number;
+}
+
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [credentials, setCredentials] = useState<{ agentId: string; privateKey: string } | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Load session from localStorage
   useEffect(() => {
-    // Load credentials from localStorage
-    const saved = localStorage.getItem('ans_credentials');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setCredentials(parsed);
-      } catch {
-        // Invalid saved credentials
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed: Session = JSON.parse(saved);
+        if (parsed.expiresAt > Date.now()) {
+          setSession(parsed);
+        }
       }
+    } catch {
+      // Invalid saved session
     }
   }, []);
 
+  const getAuthHeaders = useCallback((): Record<string, string> => {
+    if (!session?.token) return {};
+    return { Authorization: `Bearer ${session.token}` };
+  }, [session]);
+
   useEffect(() => {
-    if (!credentials) return;
+    if (!session) return;
 
     // Fetch notification count
     const fetchCount = async () => {
       try {
         const res = await fetch(`${API_URL}/v1/notifications/count`, {
-          headers: {
-            'X-Agent-Id': credentials.agentId,
-            'X-Agent-Private-Key': credentials.privateKey,
-          },
+          headers: getAuthHeaders(),
         });
         if (res.ok) {
           const data = await res.json();
@@ -60,18 +71,15 @@ export function NotificationBell() {
     // Poll every 30 seconds
     const interval = setInterval(fetchCount, 30000);
     return () => clearInterval(interval);
-  }, [credentials]);
+  }, [session, getAuthHeaders]);
 
   const fetchNotifications = async () => {
-    if (!credentials) return;
+    if (!session) return;
     
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/v1/notifications?limit=10`, {
-        headers: {
-          'X-Agent-Id': credentials.agentId,
-          'X-Agent-Private-Key': credentials.privateKey,
-        },
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -91,15 +99,12 @@ export function NotificationBell() {
   };
 
   const markAsRead = async (notificationId: string) => {
-    if (!credentials) return;
+    if (!session) return;
     
     try {
       await fetch(`${API_URL}/v1/notifications/${notificationId}/read`, {
         method: 'PATCH',
-        headers: {
-          'X-Agent-Id': credentials.agentId,
-          'X-Agent-Private-Key': credentials.privateKey,
-        },
+        headers: getAuthHeaders(),
       });
       
       setNotifications(prev => 
@@ -112,15 +117,12 @@ export function NotificationBell() {
   };
 
   const markAllAsRead = async () => {
-    if (!credentials) return;
+    if (!session) return;
     
     try {
       await fetch(`${API_URL}/v1/notifications/read-all`, {
         method: 'PATCH',
-        headers: {
-          'X-Agent-Id': credentials.agentId,
-          'X-Agent-Private-Key': credentials.privateKey,
-        },
+        headers: getAuthHeaders(),
       });
       
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -156,7 +158,7 @@ export function NotificationBell() {
     }
   };
 
-  if (!credentials) {
+  if (!session) {
     return null; // Don't show bell if not logged in
   }
 
@@ -164,7 +166,7 @@ export function NotificationBell() {
     <div className="relative">
       <button
         onClick={handleOpen}
-        className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+        className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
         aria-label="Notifications"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,9 +182,9 @@ export function NotificationBell() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Notifications</h3>
+          <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900">Notifications</h3>
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
@@ -195,23 +197,23 @@ export function NotificationBell() {
 
             <div className="max-h-96 overflow-y-auto">
               {loading ? (
-                <div className="p-8 text-center text-gray-500">Loading...</div>
+                <div className="p-8 text-center text-slate-500">Loading...</div>
               ) : notifications.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No notifications yet</div>
+                <div className="p-8 text-center text-slate-500">No notifications yet</div>
               ) : (
-                <ul className="divide-y divide-gray-100">
+                <ul className="divide-y divide-slate-100">
                   {notifications.map((notification) => {
                     const link = getNotificationLink(notification);
                     const content = (
                       <div 
-                        className={`p-4 hover:bg-gray-50 cursor-pointer ${!notification.read ? 'bg-indigo-50/50' : ''}`}
+                        className={`p-4 hover:bg-slate-50 cursor-pointer ${!notification.read ? 'bg-indigo-50/50' : ''}`}
                         onClick={() => !notification.read && markAsRead(notification.id)}
                       >
                         <div className="flex items-start gap-3">
-                          <div className={`w-2 h-2 mt-2 rounded-full shrink-0 ${notification.read ? 'bg-gray-300' : 'bg-indigo-500'}`} />
+                          <div className={`w-2 h-2 mt-2 rounded-full shrink-0 ${notification.read ? 'bg-slate-300' : 'bg-indigo-500'}`} />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-900">{getNotificationText(notification)}</p>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-sm text-slate-900">{getNotificationText(notification)}</p>
+                            <p className="text-xs text-slate-500 mt-1">
                               {new Date(notification.createdAt).toLocaleString()}
                             </p>
                           </div>
@@ -233,7 +235,7 @@ export function NotificationBell() {
               )}
             </div>
 
-            <div className="p-3 border-t border-gray-200">
+            <div className="p-3 border-t border-slate-200">
               <Link
                 href="/notifications"
                 className="block text-center text-sm text-indigo-600 hover:underline"

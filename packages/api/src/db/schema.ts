@@ -20,6 +20,18 @@ export const agents = pgTable('agents', {
   homepage: text('homepage'),
   tags: jsonb('tags').$type<string[]>().default([]),
   
+  // Linked Profiles (external identities)
+  linkedProfiles: jsonb('linked_profiles').$type<{
+    moltbook?: string;
+    github?: string;
+    twitter?: string;
+    discord?: string;
+    website?: string;
+  }>().default({}),
+  
+  // Verification
+  verificationTier: integer('verification_tier').default(0), // 0=none, 1=claimed, 2=verified, 3=org
+  
   // Accountability
   operatorId: text('operator_id'),
   operatorName: text('operator_name'),

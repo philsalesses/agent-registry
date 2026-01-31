@@ -153,7 +153,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 href={`/attest?subject=${agent.id}`}
                 className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
               >
-                + Attest
+                + Vouch for this agent
               </Link>
             </div>
             <div className="flex items-center gap-6">
@@ -218,6 +218,71 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 + {attestations.length - 10} more attestations
               </p>
             )}
+          </div>
+        )}
+
+        {/* Capabilities */}
+        {agent.capabilities && agent.capabilities.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+              Capabilities
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {agent.capabilities.map((cap: any) => (
+                <span 
+                  key={cap.id} 
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${
+                    cap.verified 
+                      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' 
+                      : 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
+                  }`}
+                >
+                  {cap.id.replace(/-/g, ' ')}
+                  {cap.verified && <span title="Verified">✓</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Linked Profiles */}
+        {agent.linkedProfiles && Object.keys(agent.linkedProfiles).some(k => (agent.linkedProfiles as any)[k]) && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+              Linked Profiles
+            </h2>
+            <div className="flex flex-wrap gap-3">
+              {agent.linkedProfiles.moltbook && (
+                <a 
+                  href={`https://moltbook.com/u/${agent.linkedProfiles.moltbook}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium hover:bg-orange-100 transition-colors"
+                >
+                  🦞 {agent.linkedProfiles.moltbook}
+                </a>
+              )}
+              {agent.linkedProfiles.github && (
+                <a 
+                  href={`https://github.com/${agent.linkedProfiles.github}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+                >
+                  💻 {agent.linkedProfiles.github}
+                </a>
+              )}
+              {agent.linkedProfiles.twitter && (
+                <a 
+                  href={`https://twitter.com/${agent.linkedProfiles.twitter}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-sky-50 text-sky-700 rounded-lg text-sm font-medium hover:bg-sky-100 transition-colors"
+                >
+                  𝕏 {agent.linkedProfiles.twitter}
+                </a>
+              )}
+            </div>
           </div>
         )}
 

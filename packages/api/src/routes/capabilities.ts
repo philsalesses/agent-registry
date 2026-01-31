@@ -1,12 +1,37 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db } from '../db';
-import { capabilities, agentCapabilities } from '../db/schema';
+import { capabilities, agentCapabilities, agents } from '../db/schema';
 import { generateId } from 'ans-core';
+import { verifySessionToken } from './auth';
 
 const capabilitiesRouter = new Hono();
+
+// Common capability IDs that agents can use
+export const COMMON_CAPABILITIES = [
+  { id: 'text-generation', description: 'Generate text content, articles, summaries' },
+  { id: 'code-generation', description: 'Write and generate code in various languages' },
+  { id: 'code-execution', description: 'Execute code in a sandboxed environment' },
+  { id: 'code-review', description: 'Review and analyze code for issues' },
+  { id: 'web-search', description: 'Search the web for information' },
+  { id: 'web-browsing', description: 'Navigate and interact with websites' },
+  { id: 'image-generation', description: 'Generate images from text descriptions' },
+  { id: 'image-analysis', description: 'Analyze and describe images' },
+  { id: 'data-analysis', description: 'Analyze datasets and extract insights' },
+  { id: 'reasoning', description: 'Complex reasoning and problem solving' },
+  { id: 'memory', description: 'Persistent memory across conversations' },
+  { id: 'file-management', description: 'Read, write, and manage files' },
+  { id: 'api-integration', description: 'Integrate with external APIs' },
+  { id: 'scheduling', description: 'Schedule tasks and reminders' },
+  { id: 'email-management', description: 'Read and send emails' },
+  { id: 'calendar-management', description: 'Manage calendar events' },
+  { id: 'translation', description: 'Translate between languages' },
+  { id: 'audio-transcription', description: 'Transcribe audio to text' },
+  { id: 'text-to-speech', description: 'Convert text to spoken audio' },
+  { id: 'agent-coordination', description: 'Coordinate with other AI agents' },
+];
 
 // Create a new capability definition
 const createCapabilitySchema = z.object({
@@ -48,23 +73,9 @@ capabilitiesRouter.get('/', async (c) => {
   return c.json({ capabilities: results });
 });
 
-// Register an agent's capability
-const registerAgentCapabilitySchema = z.object({
-  agentId: z.string(),
-  capabilityId: z.string(),
-  endpoint: z.string().url().optional(),
-});
-
-capabilitiesRouter.post('/agent', zValidator('json', registerAgentCapabilitySchema), async (c) => {
-  const body = c.req.valid('json');
-  const id = generateId('ac_', 16);
-
-  const [agentCapability] = await db.insert(agentCapabilities).values({
-    id,
-    ...body,
-  }).returning();
-
-  return c.json(agentCapability, 201);
+// Get list of common/suggested capabilities
+capabilitiesRouter.get('/common', async (c) => {
+  return c.json({ capabilities: COMMON_CAPABILITIES });
 });
 
 // Get agents with a specific capability
@@ -74,12 +85,25 @@ capabilitiesRouter.get('/:id/agents', async (c) => {
 
   const results = await db.query.agentCapabilities.findMany({
     where: eq(agentCapabilities.capabilityId, capabilityId),
-    with: {
-      // Would need to set up relations in schema
-    },
   });
 
-  return c.json({ agents: results });
+  // Get agent details
+  const agentIds = results.map(r => r.agentId);
+  const agentList = await Promise.all(
+    agentIds.map(id => db.query.agents.findFirst({ where: eq(agents.id, id) }))
+  );
+
+  const enriched = results.map((r, i) => ({
+    ...r,
+    agent: agentList[i] ? {
+      id: agentList[i]!.id,
+      name: agentList[i]!.name,
+      type: agentList[i]!.type,
+      description: agentList[i]!.description,
+    } : null,
+  })).filter(r => r.agent);
+
+  return c.json({ capability: capabilityId, agents: enriched });
 });
 
 export { capabilitiesRouter };
