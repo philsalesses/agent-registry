@@ -81,12 +81,25 @@ export class AgentRegistryClient {
   }
 
   /**
-   * Update agent profile
+   * Update agent profile (signed request)
    */
   async updateAgent(agentId: string, options: UpdateOptions): Promise<Agent> {
+    const body = JSON.stringify(options);
+    const headers: Record<string, string> = {};
+
+    // Sign the request if we have an identity
+    if (this.identity && this.identity.agentId === agentId) {
+      const timestamp = Date.now().toString();
+      const message = `PATCH:/v1/agents/${agentId}:${timestamp}:${body}`;
+      const signature = await this.identity.sign(message);
+      headers['X-Agent-Signature'] = signature;
+      headers['X-Agent-Timestamp'] = timestamp;
+    }
+
     return this.fetch(`/v1/agents/${agentId}`, {
       method: 'PATCH',
-      body: JSON.stringify(options),
+      body,
+      headers,
     });
   }
 

@@ -1,5 +1,10 @@
+'use client';
+
 import Link from 'next/link';
-import { getAgents, Agent } from '@/lib/api';
+import { useState, useEffect } from 'react';
+import { Agent } from '@/lib/api';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://agile-fulfillment-production-91e1.up.railway.app';
 
 function StatusBadge({ status }: { status: Agent['status'] }) {
   const colors = {
@@ -73,8 +78,39 @@ function AgentCard({ agent }: { agent: Agent }) {
   );
 }
 
-export default async function Home() {
-  const { agents } = await getAgents(50);
+export default function Home() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Agent[] | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/v1/agents?limit=50`)
+      .then(res => res.json())
+      .then(data => {
+        setAgents(data.agents || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    const res = await fetch(`${API_URL}/v1/discover/search?q=${encodeURIComponent(searchQuery)}&limit=20`);
+    const data = await res.json();
+    setSearchResults(data.agents || []);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults(null);
+  };
+
+  const displayAgents = searchResults ?? agents;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -93,6 +129,39 @@ export default async function Home() {
           </Link>
         </div>
       </header>
+
+      {/* Search */}
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search agents by name or description..."
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+          >
+            Search
+          </button>
+          {searchResults && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+            >
+              Clear
+            </button>
+          )}
+        </form>
+        {searchResults && (
+          <p className="text-sm text-gray-500 mt-2">
+            Found {searchResults.length} agent{searchResults.length !== 1 ? 's' : ''} matching "{searchQuery}"
+          </p>
+        )}
+      </div>
 
       {/* Stats */}
       <div className="max-w-5xl mx-auto px-4 py-6">
@@ -124,15 +193,21 @@ export default async function Home() {
 
       {/* Agent Grid */}
       <main className="max-w-5xl mx-auto px-4 pb-12">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">All Agents</h2>
-        {agents.length === 0 ? (
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          {searchResults ? 'Search Results' : 'All Agents'}
+        </h2>
+        {loading ? (
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+            <p className="text-gray-500">Loading agents...</p>
+          </div>
+        ) : displayAgents.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <p className="text-gray-500">No agents registered yet.</p>
             <p className="text-sm text-gray-400 mt-1">Be the first to register!</p>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {agents.map((agent) => (
+            {displayAgents.map((agent) => (
               <AgentCard key={agent.id} agent={agent} />
             ))}
           </div>

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { rateLimit } from './middleware/rateLimit';
 import { agentsRouter } from './routes/agents';
 import { capabilitiesRouter } from './routes/capabilities';
 import { attestationsRouter } from './routes/attestations';
@@ -13,7 +14,12 @@ export function createApp() {
 
   // Middleware
   app.use('*', logger());
-  app.use('*', cors());
+  app.use('*', cors({
+    origin: ['https://web-gold-beta-31.vercel.app', 'http://localhost:3000'],
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'X-Agent-Signature', 'X-Agent-Timestamp'],
+  }));
+  app.use('*', rateLimit);
 
   // Health check
   app.get('/', (c) => c.json({ 

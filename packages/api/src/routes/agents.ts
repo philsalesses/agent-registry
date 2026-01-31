@@ -4,7 +4,39 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { agents } from '../db/schema';
-import { generateId } from '@agent-registry/core';
+import { generateId, verifyAgentSignature } from '@agent-registry/core';
+
+/**
+ * Verify a signed request from an agent
+ * Header: X-Agent-Signature: base64-signature
+ * Header: X-Agent-Timestamp: unix-ms
+ * Signs: `${method}:${path}:${timestamp}:${bodyHash}`
+ */
+async function verifyAgentRequest(
+  agentId: string,
+  method: string,
+  path: string,
+  timestamp: string,
+  signature: string,
+  body: string
+): Promise<boolean> {
+  // Check timestamp is within 5 minutes
+  const ts = parseInt(timestamp, 10);
+  const now = Date.now();
+  if (Math.abs(now - ts) > 5 * 60 * 1000) {
+    return false;
+  }
+
+  // Get agent's public key
+  const agent = await db.query.agents.findFirst({
+    where: eq(agents.id, agentId),
+  });
+  if (!agent) return false;
+
+  // Verify signature
+  const message = `${method}:${path}:${timestamp}:${body}`;
+  return verifyAgentSignature(message, signature, agent.publicKey);
+}
 
 const agentsRouter = new Hono();
 
@@ -86,6 +118,30 @@ const updateSchema = z.object({
 agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
   const id = c.req.param('id');
   const body = c.req.valid('json');
+
+  // Check for signed request (optional for now, will be required)
+  const signature = c.req.header('X-Agent-Signature');
+  const timestamp = c.req.header('X-Agent-Timestamp');
+  
+  if (signature && timestamp) {
+    // Verify the signature
+    const rawBody = JSON.stringify(body);
+    const isValid = await verifyAgentRequest(
+      id,
+      'PATCH',
+      `/v1/agents/${id}`,
+      timestamp,
+      signature,
+      rawBody
+    );
+    if (!isValid) {
+      return c.json({ error: 'Invalid signature' }, 401);
+    }
+  }
+  // TODO: Make signature required once SDKs are updated
+  // else {
+  //   return c.json({ error: 'Signature required' }, 401);
+  // }
 
   const [updated] = await db.update(agents)
     .set({ ...body, updatedAt: new Date() })
