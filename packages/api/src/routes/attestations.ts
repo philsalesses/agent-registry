@@ -26,6 +26,19 @@ const createAttestationSchema = z.object({
 attestationsRouter.post('/', zValidator('json', createAttestationSchema), async (c) => {
   const body = c.req.valid('json');
 
+  // Block self-attestation
+  if (body.attesterId === body.subjectId) {
+    return c.json({ error: 'Cannot attest to yourself' }, 400);
+  }
+
+  // Validate behavior score is 0-100
+  if (body.claim.type === 'behavior') {
+    const value = body.claim.value;
+    if (typeof value !== 'number' || value < 0 || value > 100) {
+      return c.json({ error: 'Behavior score must be a number between 0 and 100' }, 400);
+    }
+  }
+
   // Get attester's public key
   const attester = await db.query.agents.findFirst({
     where: eq(agents.id, body.attesterId),
@@ -129,12 +142,26 @@ attestationsRouter.get('/attester/:id', async (c) => {
   return c.json({ attestations: results });
 });
 
-// List recent attestations (for activity feed)
+// List recent attestations (for activity feed) with optional filters
 attestationsRouter.get('/', async (c) => {
   const limit = parseInt(c.req.query('limit') || '30', 10);
   const offset = parseInt(c.req.query('offset') || '0', 10);
+  const subjectId = c.req.query('subjectId');
+  const attesterId = c.req.query('attesterId');
+
+  // Build where conditions
+  const conditions = [];
+  if (subjectId) {
+    conditions.push(eq(attestations.subjectId, subjectId));
+  }
+  if (attesterId) {
+    conditions.push(eq(attestations.attesterId, attesterId));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const results = await db.query.attestations.findMany({
+    where: whereClause,
     orderBy: (attestations, { desc }) => [desc(attestations.createdAt)],
     limit: Math.min(limit, 100),
     offset,

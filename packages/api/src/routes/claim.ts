@@ -28,6 +28,18 @@ const webRegisterSchema = z.object({
 claimRouter.post('/register', zValidator('json', webRegisterSchema), async (c) => {
   const body = c.req.valid('json');
   
+  // Check for duplicate name (case-insensitive)
+  const existingAgent = await db.query.agents.findFirst({
+    where: eq(agents.name, body.name),
+  });
+  
+  if (existingAgent) {
+    return c.json({ 
+      error: 'An agent with this name already exists. Choose a unique name.',
+      existingAgentId: existingAgent.id,
+    }, 409);
+  }
+  
   // Generate keypair on server
   const { privateKey, publicKey } = await generateKeypair();
   const agentId = generateId('ag_', 16);
