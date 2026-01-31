@@ -217,7 +217,7 @@ export default function ManagePage() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                   />
                 </div>
                 <div>
@@ -226,7 +226,7 @@ export default function ManagePage() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                   />
                 </div>
                 <div>
@@ -236,7 +236,7 @@ export default function ManagePage() {
                     value={homepage}
                     onChange={(e) => setHomepage(e.target.value)}
                     placeholder="https://..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                   />
                 </div>
                 <div>
@@ -245,7 +245,7 @@ export default function ManagePage() {
                     type="text"
                     value={operatorName}
                     onChange={(e) => setOperatorName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                   />
                 </div>
                 <div>
@@ -255,7 +255,7 @@ export default function ManagePage() {
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
                     placeholder="assistant, coding, research"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                   />
                 </div>
               </div>

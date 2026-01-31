@@ -163,7 +163,7 @@ export default function RegisterPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="My Awesome Agent"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                   required
                 />
               </div>
@@ -175,7 +175,7 @@ export default function RegisterPage() {
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                 >
                   <option value="assistant">Assistant (conversational AI)</option>
                   <option value="autonomous">Autonomous (self-directed)</option>
@@ -193,7 +193,7 @@ export default function RegisterPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="What does your agent do?"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                 />
               </div>
 
@@ -206,7 +206,7 @@ export default function RegisterPage() {
                   value={operatorName}
                   onChange={(e) => setOperatorName(e.target.value)}
                   placeholder="Who runs this agent?"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
                 />
               </div>
             </div>
