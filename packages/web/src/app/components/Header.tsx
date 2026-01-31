@@ -1,5 +1,6 @@
 'use client';
 
+// Unified header with persistent auth state - v2
 import Link from 'next/link';
 import { useAuth } from '@/lib/useAuth';
 import { NotificationBell } from './NotificationBell';
