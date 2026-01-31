@@ -6,6 +6,17 @@ import { Agent } from '@/lib/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
+const POPULAR_CAPABILITIES = [
+  { id: 'code-generation', label: 'Coding', icon: '💻' },
+  { id: 'web-search', label: 'Search', icon: '🔍' },
+  { id: 'image-generation', label: 'Images', icon: '🎨' },
+  { id: 'text-generation', label: 'Writing', icon: '✍️' },
+  { id: 'data-analysis', label: 'Analysis', icon: '📊' },
+  { id: 'calendar-management', label: 'Calendar', icon: '📅' },
+  { id: 'email-management', label: 'Email', icon: '📧' },
+  { id: 'payments', label: 'Payments', icon: '💳' },
+];
+
 function StatusDot({ status }: { status: Agent['status'] }) {
   const colors = {
     online: 'bg-emerald-400',
@@ -115,38 +126,118 @@ function FeatureCard({ icon, title, description }: { icon: string; title: string
   );
 }
 
+function CapabilityPill({ cap, active, onClick }: { cap: typeof POPULAR_CAPABILITIES[0]; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+        active 
+          ? 'bg-indigo-600 text-white shadow-sm' 
+          : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      <span>{cap.icon}</span>
+      <span>{cap.label}</span>
+    </button>
+  );
+}
+
 export default function Home() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Agent[] | null>(null);
+  const [searchSuggestion, setSearchSuggestion] = useState<string | null>(null);
   const [showHero, setShowHero] = useState(true);
+  const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
+  const LIMIT = 20;
 
   useEffect(() => {
-    fetch(`${API_URL}/v1/agents?limit=50`)
-      .then(res => res.json())
-      .then(data => {
-        setAgents(data.agents || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    loadAgents(0);
   }, []);
+
+  const loadAgents = async (pageNum: number, capability?: string | null) => {
+    setLoading(true);
+    try {
+      let url = `${API_URL}/v1/agents?limit=${LIMIT}&offset=${pageNum * LIMIT}`;
+      
+      if (capability) {
+        const res = await fetch(`${API_URL}/v1/discover/capability/${capability}?limit=${LIMIT}&offset=${pageNum * LIMIT}`);
+        const data = await res.json();
+        if (pageNum === 0) {
+          setAgents(data.agents || []);
+        } else {
+          setAgents(prev => [...prev, ...(data.agents || [])]);
+        }
+        setTotal(data.total || data.agents?.length || 0);
+        setHasMore((data.agents?.length || 0) === LIMIT);
+      } else {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (pageNum === 0) {
+          setAgents(data.agents || []);
+        } else {
+          setAgents(prev => [...prev, ...(data.agents || [])]);
+        }
+        setTotal(data.agents?.length || 0);
+        setHasMore((data.agents?.length || 0) === LIMIT);
+      }
+      setPage(pageNum);
+    } catch (e) {
+      console.error('Failed to load agents:', e);
+    }
+    setLoading(false);
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) {
       setSearchResults(null);
+      setSearchSuggestion(null);
       return;
     }
     setShowHero(false);
-    const res = await fetch(`${API_URL}/v1/discover/search?q=${encodeURIComponent(searchQuery)}&limit=20`);
-    const data = await res.json();
-    setSearchResults(data.agents || []);
+    setSelectedCapability(null);
+    setLoading(true);
+    
+    try {
+      // Use natural language search endpoint
+      const res = await fetch(`${API_URL}/v1/discover/find?q=${encodeURIComponent(searchQuery)}&limit=20`);
+      const data = await res.json();
+      setSearchResults(data.agents || []);
+      setSearchSuggestion(data.suggestion);
+    } catch (e) {
+      console.error('Search failed:', e);
+    }
+    setLoading(false);
   };
 
   const clearSearch = () => {
     setSearchQuery('');
     setSearchResults(null);
+    setSearchSuggestion(null);
+    setSelectedCapability(null);
+    loadAgents(0);
+  };
+
+  const handleCapabilityClick = (capId: string) => {
+    if (selectedCapability === capId) {
+      setSelectedCapability(null);
+      setSearchResults(null);
+      loadAgents(0);
+    } else {
+      setSelectedCapability(capId);
+      setSearchResults(null);
+      setShowHero(false);
+      loadAgents(0, capId);
+    }
+  };
+
+  const loadMore = () => {
+    loadAgents(page + 1, selectedCapability);
   };
 
   const displayAgents = searchResults ?? agents;
@@ -156,7 +247,7 @@ export default function Home() {
       {/* Header */}
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3" onClick={clearSearch}>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
               A
             </div>
@@ -164,7 +255,7 @@ export default function Home() {
               <h1 className="text-lg font-bold text-slate-900">Agent Name Service</h1>
               <p className="text-xs text-slate-500 -mt-0.5">ans-registry.org</p>
             </div>
-          </div>
+          </Link>
           <div className="flex items-center gap-2">
             <Link 
               href="/register" 
@@ -189,7 +280,7 @@ export default function Home() {
       </header>
 
       {/* Hero Section */}
-      {showHero && !searchResults && (
+      {showHero && !searchResults && !selectedCapability && (
         <div className="border-b border-slate-200 bg-gradient-to-b from-white to-slate-50">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
             <div className="max-w-3xl">
@@ -224,7 +315,7 @@ export default function Home() {
       )}
 
       {/* What is ANS */}
-      {showHero && !searchResults && (
+      {showHero && !searchResults && !selectedCapability && (
         <div className="border-b border-slate-200">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
             <div className="text-center mb-12">
@@ -268,7 +359,7 @@ export default function Home() {
       )}
 
       {/* Who is this for */}
-      {showHero && !searchResults && (
+      {showHero && !searchResults && !selectedCapability && (
         <div className="border-b border-slate-200 bg-slate-50">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
             <div className="text-center mb-12">
@@ -315,7 +406,7 @@ export default function Home() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search agents by name, description, or capability..."
+              placeholder="Try: 'book me a flight' or 'coding agent' or 'image generation'..."
               className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
             />
           </div>
@@ -325,7 +416,7 @@ export default function Home() {
           >
             Search
           </button>
-          {searchResults && (
+          {(searchResults || selectedCapability) && (
             <button
               type="button"
               onClick={clearSearch}
@@ -335,52 +426,79 @@ export default function Home() {
             </button>
           )}
         </form>
-        {searchResults && (
+        
+        {searchSuggestion && (
+          <p className="text-sm text-indigo-600 mt-3 flex items-center gap-2">
+            <span>💡</span> {searchSuggestion}
+          </p>
+        )}
+        
+        {searchResults && !searchSuggestion && (
           <p className="text-sm text-slate-500 mt-3">
             Found {searchResults.length} agent{searchResults.length !== 1 ? 's' : ''} matching "{searchQuery}"
           </p>
         )}
       </div>
 
-      {/* Stats */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-8">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-            <div className="text-3xl font-bold text-slate-900">{agents.length}</div>
-            <div className="text-sm text-slate-500 mt-1">Registered Agents</div>
-          </div>
-          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-            <div className="text-3xl font-bold text-emerald-600">
-              {agents.filter(a => a.status === 'online').length}
-            </div>
-            <div className="text-sm text-slate-500 mt-1">Online Now</div>
-          </div>
-          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-            <div className="text-3xl font-bold text-slate-900">
-              {new Set(agents.flatMap(a => a.tags)).size}
-            </div>
-            <div className="text-sm text-slate-500 mt-1">Unique Tags</div>
-          </div>
-          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-            <div className="text-3xl font-bold text-slate-900">
-              {new Set(agents.flatMap(a => a.protocols)).size}
-            </div>
-            <div className="text-sm text-slate-500 mt-1">Protocols</div>
-          </div>
+      {/* Capability Filter */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-6">
+        <div className="flex flex-wrap gap-2">
+          {POPULAR_CAPABILITIES.map((cap) => (
+            <CapabilityPill
+              key={cap.id}
+              cap={cap}
+              active={selectedCapability === cap.id}
+              onClick={() => handleCapabilityClick(cap.id)}
+            />
+          ))}
         </div>
       </div>
+
+      {/* Stats */}
+      {!searchResults && !selectedCapability && (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <div className="text-3xl font-bold text-slate-900">{agents.length}</div>
+              <div className="text-sm text-slate-500 mt-1">Registered Agents</div>
+            </div>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <div className="text-3xl font-bold text-emerald-600">
+                {agents.filter(a => a.status === 'online').length}
+              </div>
+              <div className="text-sm text-slate-500 mt-1">Online Now</div>
+            </div>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <div className="text-3xl font-bold text-slate-900">
+                {new Set(agents.flatMap(a => a.tags)).size}
+              </div>
+              <div className="text-sm text-slate-500 mt-1">Unique Tags</div>
+            </div>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <div className="text-3xl font-bold text-slate-900">
+                {new Set(agents.flatMap(a => a.protocols)).size}
+              </div>
+              <div className="text-sm text-slate-500 mt-1">Protocols</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Agent Grid */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-slate-900">
-            {searchResults ? 'Search Results' : 'Registered Agents'}
+            {searchResults 
+              ? 'Search Results' 
+              : selectedCapability 
+                ? `Agents with ${POPULAR_CAPABILITIES.find(c => c.id === selectedCapability)?.label || selectedCapability}`
+                : 'Registered Agents'}
           </h2>
           <span className="text-sm text-slate-500">
             {displayAgents.length} agent{displayAgents.length !== 1 ? 's' : ''}
           </span>
         </div>
-        {loading ? (
+        {loading && page === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
             <div className="animate-pulse">
               <div className="w-8 h-8 rounded-full bg-slate-200 mx-auto mb-4" />
@@ -391,7 +509,13 @@ export default function Home() {
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
             <div className="text-4xl mb-4">🤖</div>
             <p className="text-slate-700 font-medium">No agents found</p>
-            <p className="text-sm text-slate-500 mt-1">Be the first to register!</p>
+            <p className="text-sm text-slate-500 mt-1">
+              {selectedCapability 
+                ? 'No agents have registered this capability yet.'
+                : searchResults 
+                  ? 'Try a different search term.'
+                  : 'Be the first to register!'}
+            </p>
             <Link 
               href="/register"
               className="inline-block mt-4 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
@@ -400,11 +524,26 @@ export default function Home() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {displayAgents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {displayAgents.map((agent) => (
+                <AgentCard key={agent.id} agent={agent} />
+              ))}
+            </div>
+            
+            {/* Load More */}
+            {!searchResults && hasMore && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={loadMore}
+                  disabled={loading}
+                  className="px-6 py-3 bg-white text-slate-700 rounded-xl font-medium border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Loading...' : 'Load More Agents'}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
 
