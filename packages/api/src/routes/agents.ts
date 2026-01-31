@@ -337,4 +337,87 @@ agentsRouter.post('/:id/status', async (c) => {
   return c.json({ status: updated.status });
 });
 
+// Transfer ownership - change the public key (current owner must authenticate)
+const transferSchema = z.object({
+  newPublicKey: z.string().min(20).max(100),
+});
+
+agentsRouter.post('/:id/transfer', zValidator('json', transferSchema), async (c) => {
+  const id = c.req.param('id');
+  const { newPublicKey } = c.req.valid('json');
+
+  // Check for authentication from current owner
+  const signature = c.req.header('X-Agent-Signature');
+  const timestamp = c.req.header('X-Agent-Timestamp');
+  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
+
+  const agent = await db.query.agents.findFirst({
+    where: eq(agents.id, id),
+  });
+  
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+
+  // Method 1: Signed request (SDK)
+  if (signature && timestamp) {
+    const rawBody = JSON.stringify({ newPublicKey });
+    const isValid = await verifyAgentRequest(
+      id,
+      'POST',
+      `/v1/agents/${id}/transfer`,
+      timestamp,
+      signature,
+      rawBody
+    );
+    if (!isValid) {
+      return c.json({ error: 'Invalid signature - must be signed by current owner' }, 401);
+    }
+  }
+  // Method 2: Private key verification (Web UI)
+  else if (privateKeyHeader && timestamp) {
+    // Skip verification if public key is a placeholder
+    if (agent.publicKey === 'test-key-placeholder' || agent.publicKey.length < 20) {
+      // Allow transfer without verification for placeholder keys
+      console.log(`Allowing transfer of ${id} with placeholder key`);
+    } else {
+      const { sign, toBase64, fromBase64, verify } = await import('ans-core');
+      try {
+        const testMessage = new TextEncoder().encode('verify');
+        const privateKey = fromBase64(privateKeyHeader);
+        const sig = await sign(testMessage, privateKey);
+        const publicKey = fromBase64(agent.publicKey);
+        const isValid = await verify(sig, testMessage, publicKey);
+        if (!isValid) {
+          return c.json({ error: 'Invalid private key - must be current owner' }, 401);
+        }
+      } catch {
+        return c.json({ error: 'Invalid private key format' }, 401);
+      }
+    }
+  }
+  // No auth - reject (unless placeholder key)
+  else if (agent.publicKey !== 'test-key-placeholder' && agent.publicKey.length >= 20) {
+    return c.json({ 
+      error: 'Authentication required. Current owner must authorize the transfer.',
+    }, 401);
+  }
+
+  // Update the public key
+  const [updated] = await db.update(agents)
+    .set({ 
+      publicKey: newPublicKey,
+      updatedAt: new Date(),
+    })
+    .where(eq(agents.id, id))
+    .returning();
+
+  const trustScore = await computeTrustScore(id);
+  return c.json({ 
+    ...updated, 
+    trustScore,
+    message: 'Ownership transferred successfully. Save your new credentials!'
+  });
+});
+
 export { agentsRouter };
