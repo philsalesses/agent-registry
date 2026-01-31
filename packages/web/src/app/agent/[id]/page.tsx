@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getAgent, getReputation, Agent } from '@/lib/api';
+import { getAgent, getReputation, getAttestationsFor, Agent, Attestation } from '@/lib/api';
 
 function StatusBadge({ status }: { status: Agent['status'] }) {
   const config = {
@@ -44,8 +44,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default async function AgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   
-  let agent: Agent;
+  let agent: Agent & { verified?: boolean };
   let reputation: any = null;
+  let attestations: Attestation[] = [];
+  let attesterNames: Record<string, string> = {};
   
   try {
     agent = await getAgent(id);
@@ -57,6 +59,24 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
     reputation = await getReputation(id);
   } catch {
     // Reputation endpoint might fail, that's ok
+  }
+
+  try {
+    const result = await getAttestationsFor(id);
+    attestations = result.attestations;
+    
+    // Fetch attester names
+    const attesterIds = [...new Set(attestations.map(a => a.attesterId))];
+    await Promise.all(attesterIds.map(async (attesterId) => {
+      try {
+        const attester = await getAgent(attesterId);
+        attesterNames[attesterId] = attester.name;
+      } catch {
+        attesterNames[attesterId] = attesterId;
+      }
+    }));
+  } catch {
+    // Attestations might fail, that's ok
   }
 
   return (
@@ -84,6 +104,14 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl font-bold text-gray-900">{agent.name}</h1>
+                {agent.verified && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Verified
+                  </span>
+                )}
                 <StatusBadge status={agent.status} />
               </div>
               <div className="flex items-center gap-2 mt-2">
@@ -143,6 +171,44 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             {reputation.attestationCounts?.total > 0 && (
               <p className="text-sm text-gray-500 mt-3">
                 Based on {reputation.attestationCounts.total} attestation{reputation.attestationCounts.total !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Attestations - Who vouched for this agent */}
+        {attestations.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+              Vouched By
+            </h2>
+            <div className="space-y-3">
+              {attestations.slice(0, 10).map((attestation) => (
+                <div key={attestation.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                  <div className="flex items-center gap-3">
+                    <Link 
+                      href={`/agent/${attestation.attesterId}`}
+                      className="font-medium text-blue-600 hover:underline"
+                    >
+                      {attesterNames[attestation.attesterId] || attestation.attesterId}
+                    </Link>
+                    <span className="text-sm text-gray-500">
+                      {attestation.claimType === 'behavior' 
+                        ? `rated ${attestation.claimValue}/100`
+                        : attestation.claimType === 'capability'
+                        ? `verified ${attestation.claimCapabilityId}`
+                        : attestation.claimType}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {new Date(attestation.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {attestations.length > 10 && (
+              <p className="text-sm text-gray-500 mt-3">
+                + {attestations.length - 10} more attestations
               </p>
             )}
           </div>

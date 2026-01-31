@@ -86,3 +86,23 @@ export async function discoverAgents(options: {
   if (!res.ok) throw new Error('Discovery failed');
   return res.json();
 }
+
+export interface Attestation {
+  id: string;
+  attesterId: string;
+  subjectId: string;
+  claimType: 'behavior' | 'capability' | 'identity';
+  claimCapabilityId?: string;
+  claimValue: boolean | number;
+  signature: string;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export async function getAttestationsFor(agentId: string): Promise<{ attestations: Attestation[] }> {
+  const res = await fetch(`${API_URL}/v1/attestations/subject/${agentId}`, {
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) throw new Error('Failed to get attestations');
+  return res.json();
+}

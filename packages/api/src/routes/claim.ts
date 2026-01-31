@@ -27,7 +27,7 @@ claimRouter.post('/register', zValidator('json', webRegisterSchema), async (c) =
   const agentId = generateId('ag_', 16);
   const claimToken = generateId('ct_', 32); // One-time claim token
 
-  // Store agent with hashed claim token
+  // Store agent with hashed claim token (auto-verified since we gave them the private key)
   const [agent] = await db.insert(agents).values({
     id: agentId,
     name: body.name,
@@ -35,8 +35,11 @@ claimRouter.post('/register', zValidator('json', webRegisterSchema), async (c) =
     type: body.type,
     description: body.description,
     operatorName: body.operatorName,
-    // Store claim token hash in metadata for recovery
-    metadata: { claimTokenHash: await hashToken(claimToken) },
+    metadata: { 
+      claimTokenHash: await hashToken(claimToken),
+      verified: true,
+      verifiedAt: new Date().toISOString(),
+    },
   }).returning();
 
   // Return credentials - USER MUST SAVE THESE
