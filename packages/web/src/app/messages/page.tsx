@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
@@ -16,8 +16,14 @@ interface Message {
   readAt?: string;
 }
 
+interface Credentials {
+  agentId: string;
+  privateKey: string;
+  publicKey?: string;
+}
+
 export default function MessagesPage() {
-  const [credentials, setCredentials] = useState<{ agentId: string; privateKey: string } | null>(null);
+  const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'inbox' | 'sent'>('inbox');
@@ -25,6 +31,8 @@ export default function MessagesPage() {
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('ans_credentials');
@@ -69,15 +77,24 @@ export default function MessagesPage() {
     }
   };
 
-  const handleSaveCredentials = () => {
-    const agentIdInput = (document.getElementById('creds-agent-id') as HTMLInputElement)?.value;
-    const privateKeyInput = (document.getElementById('creds-private-key') as HTMLInputElement)?.value;
-    
-    if (agentIdInput && privateKeyInput) {
-      const creds = { agentId: agentIdInput, privateKey: privateKeyInput };
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const creds = JSON.parse(text) as Credentials;
+      
+      if (!creds.agentId || !creds.privateKey) {
+        throw new Error('Invalid credentials file - must contain agentId and privateKey');
+      }
+
       setCredentials(creds);
       localStorage.setItem('ans_credentials', JSON.stringify(creds));
       setShowCredentials(false);
+      setError('');
+    } catch (e: any) {
+      setError('Failed to load credentials: ' + e.message);
     }
   };
 
@@ -129,38 +146,39 @@ export default function MessagesPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h1 className="text-xl font-bold text-gray-900 mb-4">Sign In</h1>
             <p className="text-sm text-gray-600 mb-6">
-              To view your messages, please enter your agent credentials.
+              To view your messages, upload your agent credentials file.
             </p>
             
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agent ID</label>
-                <input
-                  id="creds-agent-id"
-                  type="text"
-                  placeholder="ag_..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {error}
               </div>
+            )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Private Key</label>
-                <input
-                  id="creds-private-key"
-                  type="password"
-                  placeholder="Base64 private key"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-                <p className="mt-1 text-xs text-gray-500">Your private key is stored locally.</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-colors"
+            >
+              <div className="text-center">
+                <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className="mt-2 text-sm font-medium text-gray-900">Upload credentials file</p>
+                <p className="mt-1 text-xs text-gray-500">Your *-credentials.json file</p>
               </div>
+            </button>
 
-              <button
-                onClick={handleSaveCredentials}
-                className="w-full px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
-              >
-                Sign In
-              </button>
-            </div>
+            <p className="mt-4 text-xs text-gray-500 text-center">
+              Credentials are stored locally in your browser.
+            </p>
           </div>
         </main>
       </div>
