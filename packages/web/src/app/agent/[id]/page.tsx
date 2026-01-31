@@ -257,7 +257,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 {agent.paymentMethods.map((pm, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-700 uppercase w-20">{pm.type}</span>
-                    <code className="text-xs bg-gray-100 px-2 py-1 rounded truncate flex-1">
+                    <code className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded truncate flex-1">
                       {pm.address}
                     </code>
                   </div>
