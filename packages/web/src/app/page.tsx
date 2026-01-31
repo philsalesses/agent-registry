@@ -150,6 +150,8 @@ export default function Home() {
   const [searchSuggestion, setSearchSuggestion] = useState<string | null>(null);
   const [showHero, setShowHero] = useState(true);
   const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
+  const [onlineOnly, setOnlineOnly] = useState(false);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [total, setTotal] = useState(0);
@@ -159,32 +161,51 @@ export default function Home() {
     loadAgents(0);
   }, []);
 
-  const loadAgents = async (pageNum: number, capability?: string | null) => {
+  const loadAgents = async (
+    pageNum: number, 
+    capability?: string | null,
+    online?: boolean,
+    verified?: boolean
+  ) => {
     setLoading(true);
     try {
-      let url = `${API_URL}/v1/agents?limit=${LIMIT}&offset=${pageNum * LIMIT}`;
+      // Use discovery API with filters
+      const body: any = {
+        limit: LIMIT,
+        offset: pageNum * LIMIT,
+      };
       
       if (capability) {
-        const res = await fetch(`${API_URL}/v1/discover/capability/${capability}?limit=${LIMIT}&offset=${pageNum * LIMIT}`);
-        const data = await res.json();
-        if (pageNum === 0) {
-          setAgents(data.agents || []);
-        } else {
-          setAgents(prev => [...prev, ...(data.agents || [])]);
-        }
-        setTotal(data.total || data.agents?.length || 0);
-        setHasMore((data.agents?.length || 0) === LIMIT);
-      } else {
-        const res = await fetch(url);
-        const data = await res.json();
-        if (pageNum === 0) {
-          setAgents(data.agents || []);
-        } else {
-          setAgents(prev => [...prev, ...(data.agents || [])]);
-        }
-        setTotal(data.agents?.length || 0);
-        setHasMore((data.agents?.length || 0) === LIMIT);
+        body.capabilities = [capability];
       }
+      if (online) {
+        body.status = ['online'];
+      }
+      if (verified) {
+        body.minTrustScore = 1; // Has at least some attestations
+      }
+      
+      const res = await fetch(`${API_URL}/v1/discover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      
+      let results = data.agents || [];
+      
+      // Client-side filter for verified (has verified badge)
+      if (verified) {
+        results = results.filter((a: any) => a.verified === true);
+      }
+      
+      if (pageNum === 0) {
+        setAgents(results);
+      } else {
+        setAgents(prev => [...prev, ...results]);
+      }
+      setTotal(data.total || results.length);
+      setHasMore(data.hasMore || false);
       setPage(pageNum);
     } catch (e) {
       console.error('Failed to load agents:', e);
@@ -220,24 +241,42 @@ export default function Home() {
     setSearchResults(null);
     setSearchSuggestion(null);
     setSelectedCapability(null);
-    loadAgents(0);
+    setOnlineOnly(false);
+    setVerifiedOnly(false);
+    loadAgents(0, null, false, false);
   };
 
   const handleCapabilityClick = (capId: string) => {
     if (selectedCapability === capId) {
       setSelectedCapability(null);
       setSearchResults(null);
-      loadAgents(0);
+      loadAgents(0, null, onlineOnly, verifiedOnly);
     } else {
       setSelectedCapability(capId);
       setSearchResults(null);
       setShowHero(false);
-      loadAgents(0, capId);
+      loadAgents(0, capId, onlineOnly, verifiedOnly);
     }
   };
 
+  const handleOnlineToggle = () => {
+    const newValue = !onlineOnly;
+    setOnlineOnly(newValue);
+    setSearchResults(null);
+    setShowHero(false);
+    loadAgents(0, selectedCapability, newValue, verifiedOnly);
+  };
+
+  const handleVerifiedToggle = () => {
+    const newValue = !verifiedOnly;
+    setVerifiedOnly(newValue);
+    setSearchResults(null);
+    setShowHero(false);
+    loadAgents(0, selectedCapability, onlineOnly, newValue);
+  };
+
   const loadMore = () => {
-    loadAgents(page + 1, selectedCapability);
+    loadAgents(page + 1, selectedCapability, onlineOnly, verifiedOnly);
   };
 
   const displayAgents = searchResults ?? agents;
@@ -440,8 +479,38 @@ export default function Home() {
         )}
       </div>
 
-      {/* Capability Filter */}
+      {/* Filters */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-6">
+        {/* Status Filters */}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <span className="text-sm text-slate-500">Filter:</span>
+          <button
+            onClick={handleOnlineToggle}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              onlineOnly 
+                ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300' 
+                : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${onlineOnly ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            Online Only
+          </button>
+          <button
+            onClick={handleVerifiedToggle}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              verifiedOnly 
+                ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-300' 
+                : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <svg className={`w-4 h-4 ${verifiedOnly ? 'text-sky-500' : 'text-slate-400'}`} fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            Verified Only
+          </button>
+        </div>
+        
+        {/* Capability Filters */}
         <div className="flex flex-wrap gap-2">
           {POPULAR_CAPABILITIES.map((cap) => (
             <CapabilityPill
@@ -455,7 +524,7 @@ export default function Home() {
       </div>
 
       {/* Stats */}
-      {!searchResults && !selectedCapability && (
+      {!searchResults && !selectedCapability && !onlineOnly && !verifiedOnly && (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-8">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">

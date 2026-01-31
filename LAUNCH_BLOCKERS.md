@@ -1,65 +1,85 @@
-# Launch Blockers - Updated Status
+# ANS Launch Status
 
-## ✅ DONE
+*Last updated: 2026-01-31*
+
+## ✅ DONE - Ready for Launch
 
 ### Security
-- [x] **Enforce auth on edits** — 401 if no valid signature/key
-- [x] **Validate Bitcoin addresses** — Regex validation for legacy/P2SH/bech32
-- [x] **Validate URLs** — Endpoint, homepage validated
-- [x] **Rate limit by IP** — Basic rate limiting in place
+- [x] Enforce auth on edits (401 without valid signature)
+- [x] Validate Bitcoin addresses (legacy/P2SH/bech32)
+- [x] Validate URLs (endpoint, homepage)
+- [x] Rate limit by IP
+- [x] CORS restricted to known origins
 
 ### Trust System
-- [x] **Trust score visible in UI** — Homepage cards + detail page
-- [x] **Attestation UI** — /attest page works
-- [x] **Verification badge** — Shows on agent profile when verified
-- [x] **"Vouched by" display** — Shows attesters on agent detail page
-- [x] **Auto-verify on registration** — Web registration auto-verifies
+- [x] Trust scores visible in UI (cards + detail page)
+- [x] Attestation UI (/attest page)
+- [x] Verification badge on profiles
+- [x] "Vouched by" section showing attesters
+- [x] Auto-verify on web registration
+
+### Discovery
+- [x] Natural language search ("book flight" → capability match)
+- [x] Capability filter pills (Coding, Search, Images, etc.)
+- [x] Search includes name AND description
+- [x] Pagination with "Load More"
 
 ### User Experience
-- [x] **Agent detail page shows reputation** — Trust score + breakdown
-- [x] **Registration flow** — Works with credential download
+- [x] Registration flow with credential download
+- [x] Agent detail page with trust breakdown
+- [x] Stats on homepage (count, online, tags, protocols)
+- [x] Hero section with value prop
 
-### Distribution
-- [x] **Custom domain** — ans-registry.org (DNS setup pending)
-- [x] **Agent instructions** — skill.md for agents
-
----
-
-## 🟡 REMAINING (Before Launch)
-
-| Task | Time | Notes |
-|------|------|-------|
-| DNS setup | 5 min | Phil: point ans-registry.org → Vercel, api.ans-registry.org → Railway |
-| Vercel env var | 2 min | Set NEXT_PUBLIC_API_URL=https://api.ans-registry.org |
-| Railway custom domain | 2 min | Add api.ans-registry.org |
-| Publish SDK to npm | 10 min | `npm publish` in packages/sdk-js |
-| Redeploy API | 5 min | Push to Railway to get auto-verify fix live |
-
-**Total: ~25 min**
+### Infrastructure
+- [x] Custom domain: ans-registry.org (Vercel)
+- [x] Custom domain: api.ans-registry.org (Railway)
+- [x] Env vars configured
+- [x] skill.md for agent instructions
+- [x] SDK renamed to ans-sdk
 
 ---
 
-## 🟢 POST-LAUNCH (Nice to Have)
+## 🚀 LAUNCH CHECKLIST
 
-- [ ] Capability browser (browse agents by capability)
-- [ ] "Verified only" filter in discovery
-- [ ] API documentation (OpenAPI/Swagger)
-- [ ] Search by tags
-- [ ] Agent count / stats on homepage
-- [ ] Notifications (someone attested to you)
-- [ ] Mobile responsive polish
-- [ ] 404 pages for bad agent IDs
+- [x] DNS: ans-registry.org → Vercel
+- [x] DNS: api.ans-registry.org → Railway
+- [x] Vercel: Custom domain added
+- [x] Vercel: NEXT_PUBLIC_API_URL set
+- [x] Railway: Custom domain added
+- [ ] **Railway: Redeploy API** (get latest code live)
+- [ ] **npm: Publish ans-sdk** (`cd packages/sdk-js && npm publish`)
+- [ ] **npm: Publish ans-core** (`cd packages/core && npm publish`)
+- [ ] **Verify site works** at https://ans-registry.org
+- [ ] **Announce!**
 
 ---
 
-## Launch Checklist
+## 🟢 POST-LAUNCH (Done!)
 
-1. [ ] DNS: ans-registry.org → Vercel
-2. [ ] DNS: api.ans-registry.org → Railway  
-3. [ ] Vercel: Add custom domain
-4. [ ] Vercel: Set NEXT_PUBLIC_API_URL env var
-5. [ ] Railway: Add custom domain
-6. [ ] Redeploy API (auto-verify fix)
-7. [ ] Verify site works at ans-registry.org
-8. [ ] Publish SDK: `cd packages/sdk-js && npm publish`
-9. [ ] Announce!
+### UI Polish
+- [x] Capability browser
+- [x] "Online only" status filter
+- [x] "Verified only" toggle
+- [x] 404 page styled to match
+
+### Search/Discovery  
+- [x] Status and verified filters work with capability filters
+- [x] Filters persist across pagination
+
+### Remaining (Lower Priority)
+- [ ] Tag filter UI (API supports it)
+- [ ] API docs (OpenAPI/Swagger)
+- [ ] Mobile responsive polish (works, could be better)
+
+---
+
+## 🔵 FUTURE
+
+- [ ] Leaderboard page (top trusted agents)
+- [ ] Activity feed (recent registrations/attestations)
+- [ ] Python SDK
+- [ ] Agent notifications
+- [ ] Dark mode
+- [ ] Agent messaging
+- [ ] CI/CD pipeline
+- [ ] Error tracking (Sentry)
