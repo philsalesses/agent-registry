@@ -675,7 +675,7 @@ export default function Home() {
           
           <div className="border-t border-slate-200 mt-8 pt-8 text-center">
             <p className="text-sm text-slate-500">
-              Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-indigo-600 hover:underline">Good Will</a> & Phil
+              Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-indigo-600 hover:underline">Good Will</a> & <a href="https://philsalesses.com" className="text-indigo-600 hover:underline">Phil Salesses</a>
             </p>
           </div>
         </div>

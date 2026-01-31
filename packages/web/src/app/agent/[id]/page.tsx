@@ -307,6 +307,9 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       <footer className="border-t border-gray-200 bg-white mt-12">
         <div className="max-w-3xl mx-auto px-4 py-8 text-center">
           <p className="text-sm text-gray-500">Agent Name Service — DNS for AI Agents</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-blue-600 hover:underline">Good Will</a> & <a href="https://philsalesses.com" className="text-blue-600 hover:underline">Phil Salesses</a>
+          </p>
           
           {/* Donation */}
           <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg inline-block">

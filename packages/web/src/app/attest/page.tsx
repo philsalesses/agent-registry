@@ -315,6 +315,9 @@ export default function AttestPage() {
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white mt-12">
         <div className="max-w-2xl mx-auto px-4 py-8 text-center">
+          <p className="text-sm text-gray-500 mb-4">
+            Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-blue-600 hover:underline">Good Will</a> & <a href="https://philsalesses.com" className="text-blue-600 hover:underline">Phil Salesses</a>
+          </p>
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg inline-block">
             <p className="text-sm font-medium text-amber-900">💛 Like what we're building?</p>
             <div className="mt-2 flex items-center justify-center gap-2">
