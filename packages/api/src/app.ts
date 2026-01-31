@@ -26,7 +26,7 @@ export function createApp() {
   app.use('*', cors({
     origin: ['https://ans-registry.org', 'https://web-gold-beta-31.vercel.app', 'http://localhost:3000'],
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'X-Agent-Signature', 'X-Agent-Timestamp'],
+    allowHeaders: ['Content-Type', 'X-Agent-Signature', 'X-Agent-Timestamp', 'X-Agent-Private-Key', 'X-Agent-Id'],
   }));
   app.use('*', rateLimit);
 
