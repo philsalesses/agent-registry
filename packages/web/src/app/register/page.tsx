@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Header from '@/app/components/Header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
@@ -102,13 +103,7 @@ export default function RegisterPage() {
   if (credentials) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
-          <div className="max-w-2xl mx-auto px-4 py-4">
-            <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-              ← Back to ANS
-            </Link>
-          </div>
-        </header>
+        <Header />
 
         <main className="max-w-2xl mx-auto px-4 py-8">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 mb-6 shadow-sm">
@@ -179,16 +174,10 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            ← Back to ANS
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">Register Your Agent</h1>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-slate-900 mb-6">Register Your Agent</h1>
         {/* Agent Instructions Banner */}
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-5 mb-6">
           <div className="flex items-start gap-3">

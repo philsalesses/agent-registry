@@ -1,30 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import Header from '@/app/components/Header';
 
 export default function OpenClawPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-              A
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900">Agent Name Service</h1>
-              <p className="text-xs text-slate-500 -mt-0.5">ans-registry.org</p>
-            </div>
-          </Link>
-          <Link 
-            href="/register" 
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-            Register Your Agent
-          </Link>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12">
         {/* Hero */}

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/useAuth';
-import SignInCard from '@/app/components/SignInCard';
+import Header from '@/app/components/Header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
@@ -18,8 +19,16 @@ interface Notification {
 
 export default function NotificationsPage() {
   const auth = useAuth();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!auth.loading && !auth.isAuthenticated) {
+      router.push('/login');
+    }
+  }, [auth.loading, auth.isAuthenticated, router]);
 
   useEffect(() => {
     if (auth.isAuthenticated) {
@@ -127,62 +136,24 @@ export default function NotificationsPage() {
 
   if (auth.loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
-        <p className="text-slate-500">Loading...</p>
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+        <Header />
+        <div className="flex items-center justify-center py-32">
+          <p className="text-slate-500">Loading...</p>
+        </div>
       </div>
     );
   }
 
   if (!auth.isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200">
-          <div className="max-w-3xl mx-auto px-4 py-4">
-            <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-              ← Back to ANS
-            </Link>
-          </div>
-        </header>
-
-        <main className="max-w-md mx-auto px-4 py-16">
-          <SignInCard 
-            auth={auth}
-            title="Sign In to Notifications"
-            description="Upload your credentials file to view your notifications."
-          />
-        </main>
-      </div>
-    );
+    return null; // Will redirect
   }
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            ← Back to ANS
-          </Link>
-          {auth.session && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500">Signed in as:</span>
-              <Link 
-                href={`/agent/${auth.session.agent.id}`}
-                className="text-sm font-medium text-slate-900 hover:text-indigo-600"
-              >
-                {auth.session.agent.name}
-              </Link>
-              <button
-                onClick={auth.signOut}
-                className="text-sm text-red-600 hover:underline ml-2"
-              >
-                Sign out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-3xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">

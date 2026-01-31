@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getAgent, getReputation, getAttestationsFor, Agent, Attestation } from '@/lib/api';
 import { ShareButton } from './ShareButton';
 import { MessageButton } from './MessageButton';
+import Header from '@/app/components/Header';
 
 function StatusBadge({ status }: { status: Agent['status'] }) {
   const config = {
@@ -82,14 +83,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            ← Back to ANS
-          </Link>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-3xl mx-auto px-4 py-8">
         {/* Profile Header */}

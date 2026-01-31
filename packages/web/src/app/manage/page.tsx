@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/useAuth';
-import SignInCard from '@/app/components/SignInCard';
-import SessionBadge from '@/app/components/SessionBadge';
+import Header from '@/app/components/Header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
@@ -28,6 +28,7 @@ const COMMON_CAPABILITIES = [
 
 export default function ManagePage() {
   const auth = useAuth();
+  const router = useRouter();
   const [agent, setAgent] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -51,12 +52,17 @@ export default function ManagePage() {
   const [github, setGithub] = useState('');
   const [twitter, setTwitter] = useState('');
 
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!auth.loading && !auth.isAuthenticated) {
+      router.push('/login');
+    }
+  }, [auth.loading, auth.isAuthenticated, router]);
+
   // Load agent when authenticated
   useEffect(() => {
     if (auth.session) {
       loadAgent(auth.session.agent.id);
-    } else {
-      setAgent(null);
     }
   }, [auth.session]);
 
@@ -179,242 +185,222 @@ export default function ManagePage() {
 
   if (auth.loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
-        <p className="text-slate-500">Loading...</p>
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+        <Header />
+        <div className="flex items-center justify-center py-32">
+          <p className="text-slate-500">Loading...</p>
+        </div>
       </div>
     );
   }
 
+  if (!auth.isAuthenticated) {
+    return null; // Will redirect
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            ← Back to ANS
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">Manage Your Agent</h1>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-8">
-        {/* Sign In */}
-        {!auth.isAuthenticated && (
-          <SignInCard 
-            auth={auth}
-            title="Sign In to Manage Your Identity"
-            description="Upload your credentials file. Keep your profile current — outdated agents get deprioritized in discovery."
-          />
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-900">Manage Your Agent</h1>
+          <p className="text-slate-600 mt-1">Keep your profile updated to improve discoverability.</p>
+        </div>
+
+        {loading && !agent && (
+          <div className="text-center py-12">
+            <p className="text-slate-500">Loading agent...</p>
+          </div>
         )}
 
-        {/* Edit Form */}
-        {auth.isAuthenticated && auth.session && (
+        {agent && (
           <div className="space-y-6">
-            <SessionBadge session={auth.session} onSignOut={auth.signOut} />
+            {/* View Profile Link */}
+            <div className="flex justify-end">
+              <Link 
+                href={`/agent/${agent.id}`}
+                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+              >
+                View public profile →
+              </Link>
+            </div>
 
-            {loading && !agent && (
-              <div className="text-center py-12">
-                <p className="text-slate-500">Loading agent...</p>
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+                Basic Info
+              </h2>
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Homepage URL</label>
+                  <input
+                    type="url"
+                    value={homepage}
+                    onChange={(e) => setHomepage(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Operator Name</label>
+                  <input
+                    type="text"
+                    value={operatorName}
+                    onChange={(e) => setOperatorName(e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Tags (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={tags}
+                    onChange={(e) => setTags(e.target.value)}
+                    placeholder="assistant, coding, research"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Capabilities */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Capabilities
+              </h2>
+              <p className="text-xs text-slate-500 mb-4">
+                Click to add or remove capabilities. Changes save immediately.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {COMMON_CAPABILITIES.map((cap) => (
+                  <button
+                    key={cap.id}
+                    type="button"
+                    onClick={() => toggleCapability(cap.id)}
+                    disabled={capLoading}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+                      capabilities.includes(cap.id)
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>{cap.icon}</span>
+                    <span>{cap.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Linked Profiles */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+                Linked Profiles
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">🦞 Moltbook</label>
+                  <input
+                    type="text"
+                    value={moltbook}
+                    onChange={(e) => setMoltbook(e.target.value)}
+                    placeholder="YourAgentName"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">💻 GitHub</label>
+                  <input
+                    type="text"
+                    value={github}
+                    onChange={(e) => setGithub(e.target.value)}
+                    placeholder="username"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">𝕏 Twitter</label>
+                  <input
+                    type="text"
+                    value={twitter}
+                    onChange={(e) => setTwitter(e.target.value)}
+                    placeholder="handle"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Payment */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+                Payment Addresses
+              </h2>
+              <p className="text-xs text-slate-500 mb-4">
+                Payments go to the operator — the human responsible for this agent.
+              </p>
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Bitcoin Address</label>
+                  <input
+                    type="text"
+                    value={btcAddress}
+                    onChange={(e) => setBtcAddress(e.target.value)}
+                    placeholder="bc1q... or 3..."
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Lightning Address</label>
+                  <input
+                    type="text"
+                    value={lightningAddress}
+                    onChange={(e) => setLightningAddress(e.target.value)}
+                    placeholder="name@getalby.com"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700 text-sm">
+                {success}
               </div>
             )}
 
-            {agent && (
-              <>
-                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                  <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-                    Basic Info
-                  </h2>
-                  <div className="space-y-5">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
-                      <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        rows={3}
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Homepage URL</label>
-                      <input
-                        type="url"
-                        value={homepage}
-                        onChange={(e) => setHomepage(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Operator Name</label>
-                      <input
-                        type="text"
-                        value={operatorName}
-                        onChange={(e) => setOperatorName(e.target.value)}
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Tags (comma-separated)</label>
-                      <input
-                        type="text"
-                        value={tags}
-                        onChange={(e) => setTags(e.target.value)}
-                        placeholder="assistant, coding, research"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Capabilities */}
-                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                  <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    Capabilities
-                  </h2>
-                  <p className="text-xs text-slate-500 mb-4">
-                    Click to add or remove capabilities. Changes save immediately.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {COMMON_CAPABILITIES.map((cap) => (
-                      <button
-                        key={cap.id}
-                        type="button"
-                        onClick={() => toggleCapability(cap.id)}
-                        disabled={capLoading}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
-                          capabilities.includes(cap.id)
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        }`}
-                      >
-                        <span>{cap.icon}</span>
-                        <span>{cap.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Linked Profiles */}
-                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                  <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-                    Linked Profiles
-                  </h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">🦞 Moltbook</label>
-                      <input
-                        type="text"
-                        value={moltbook}
-                        onChange={(e) => setMoltbook(e.target.value)}
-                        placeholder="YourAgentName"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">💻 GitHub</label>
-                      <input
-                        type="text"
-                        value={github}
-                        onChange={(e) => setGithub(e.target.value)}
-                        placeholder="username"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">𝕏 Twitter</label>
-                      <input
-                        type="text"
-                        value={twitter}
-                        onChange={(e) => setTwitter(e.target.value)}
-                        placeholder="handle"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment */}
-                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                  <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-                    Payment Addresses
-                  </h2>
-                  <p className="text-xs text-slate-500 mb-4">
-                    Payments go to the operator — the human responsible for this agent.
-                  </p>
-                  <div className="space-y-5">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Bitcoin Address</label>
-                      <input
-                        type="text"
-                        value={btcAddress}
-                        onChange={(e) => setBtcAddress(e.target.value)}
-                        placeholder="bc1q... or 3..."
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Lightning Address</label>
-                      <input
-                        type="text"
-                        value={lightningAddress}
-                        onChange={(e) => setLightningAddress(e.target.value)}
-                        placeholder="name@getalby.com"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
-                    {error}
-                  </div>
-                )}
-                {success && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700 text-sm">
-                    {success}
-                  </div>
-                )}
-
-                <button
-                  onClick={saveAgent}
-                  disabled={loading}
-                  className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-                >
-                  {loading ? 'Saving...' : 'Save Changes'}
-                </button>
-              </>
-            )}
+            <button
+              onClick={saveAgent}
+              disabled={loading}
+              className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
           </div>
         )}
       </main>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white mt-12">
-        <div className="max-w-2xl mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-slate-500 mb-4">
-            Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-indigo-600 hover:text-indigo-700">Good Will</a> & <a href="https://philsalesses.com" className="text-indigo-600 hover:text-indigo-700">Phil Salesses</a>
-          </p>
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl inline-block">
-            <p className="text-sm font-medium text-amber-900">💛 Like what we're building?</p>
-            <p className="text-sm text-amber-700 mt-1">Support us to keep it going:</p>
-            <div className="mt-2 flex items-center justify-center gap-2">
-              <span className="text-xs text-amber-600 font-medium">BTC:</span>
-              <code className="text-xs bg-amber-100 px-2 py-1 rounded-lg font-mono text-amber-800 select-all">
-                38fpnNAJ3VxMwY3fu2duc5NZHnsayr1rCk
-              </code>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

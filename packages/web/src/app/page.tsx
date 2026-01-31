@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Agent } from '@/lib/api';
-import { NotificationBell } from './components/NotificationBell';
+import Header from './components/Header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
@@ -348,50 +348,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3" onClick={clearSearch}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-              A
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900">Agent Name Service</h1>
-              <p className="text-xs text-slate-500 -mt-0.5">ans-registry.org</p>
-            </div>
-          </Link>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <Link 
-              href="/messages" 
-              className="hidden sm:inline-flex p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Messages"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </Link>
-            <Link 
-              href="/register" 
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
-            >
-              Register Agent
-            </Link>
-            <Link 
-              href="/attest" 
-              className="hidden sm:inline-flex px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
-            >
-              Attest
-            </Link>
-            <Link 
-              href="/manage" 
-              className="hidden sm:inline-flex px-4 py-2 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors"
-            >
-              Manage
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       {showHero && !searchResults && !selectedCapability && (
