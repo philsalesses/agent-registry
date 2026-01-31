@@ -33,16 +33,36 @@ attestationsRouter.post('/', zValidator('json', createAttestationSchema), async 
     return c.json({ error: 'Attester not found' }, 404);
   }
 
-  // Verify the signature
-  const message = JSON.stringify({
-    attesterId: body.attesterId,
-    subjectId: body.subjectId,
-    claim: body.claim,
-  });
+  // Check for private key header (web UI auth)
+  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
+  
+  if (privateKeyHeader) {
+    // Verify private key matches public key
+    const { sign, toBase64, fromBase64, verify } = await import('@agent-registry/core');
+    try {
+      const testMessage = new TextEncoder().encode('verify');
+      const privateKey = fromBase64(privateKeyHeader);
+      const sig = await sign(testMessage, privateKey);
+      const publicKey = fromBase64(attester.publicKey);
+      const isValid = await verify(sig, testMessage, publicKey);
+      if (!isValid) {
+        return c.json({ error: 'Invalid private key' }, 401);
+      }
+    } catch {
+      return c.json({ error: 'Invalid private key format' }, 401);
+    }
+  } else {
+    // Verify the signature
+    const message = JSON.stringify({
+      attesterId: body.attesterId,
+      subjectId: body.subjectId,
+      claim: body.claim,
+    });
 
-  const isValid = await verifyAgentSignature(message, body.signature, attester.publicKey);
-  if (!isValid) {
-    return c.json({ error: 'Invalid signature' }, 400);
+    const isValid = await verifyAgentSignature(message, body.signature, attester.publicKey);
+    if (!isValid) {
+      return c.json({ error: 'Invalid signature' }, 400);
+    }
   }
 
   // Store the attestation
