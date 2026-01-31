@@ -17,7 +17,10 @@ export default function Header() {
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-sm">
               <span className="text-white font-bold text-lg">A</span>
             </div>
-            <span className="font-bold text-xl text-slate-900">ANS</span>
+            <div className="hidden sm:block">
+              <span className="font-bold text-lg text-slate-900">Agent Name Service</span>
+            </div>
+            <span className="font-bold text-xl text-slate-900 sm:hidden">ANS</span>
           </Link>
 
           {/* Nav */}
