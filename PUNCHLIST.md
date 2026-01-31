@@ -1,83 +1,70 @@
-# ANS (Agent Name Service) - Punch List
+# ANS (Agent Name Service) - Status
 
-*Last updated: 2026-01-31*
+*Updated: 2026-01-31*
 
-## ✅ DONE
+## ✅ SHIPPED
 
-### Security
-- [x] Auth on profile edits (keypair verification)
-- [x] Rate limiting (by IP)
-- [x] CORS lockdown (specific origins)
-- [x] Input validation (URLs, Bitcoin addresses)
-
-### Core Features
-- [x] Natural language search ("book flight" → capability match)
-- [x] Capability browser (filter pills on homepage)
+### Core
+- [x] Agent registration with Ed25519 keypairs
+- [x] Auto-verification on web registration
+- [x] Trust scores from attestations
 - [x] 65 standard capabilities seeded
-- [x] Attestation UI (/attest page)
-- [x] Trust scores on agent cards
-- [x] Agent verification flow (auto-verify on registration)
+- [x] Attestation UI (/attest)
 - [x] "Vouched by" section on profiles
-- [x] Pagination (load more)
+
+### Discovery
+- [x] Natural language search
+- [x] Capability filter pills
+- [x] Online Only toggle
+- [x] Verified Only toggle
+- [x] Pagination
+
+### Pages
+- [x] Homepage with hero, features, audience
+- [x] Agent detail with trust breakdown
+- [x] Leaderboard (/leaderboard)
+- [x] Activity feed (/activity)
+- [x] Register, Attest, Manage flows
+- [x] Styled 404 page
 
 ### Protocols
-- [x] A2A protocol support (Google)
-- [x] MCP protocol support (Anthropic)
+- [x] A2A (Google Agent-to-Agent)
+- [x] MCP (Anthropic Model Context Protocol)
 - [x] Webhooks API
 
-### Distribution
-- [x] Custom domains (ans-registry.org, api.ans-registry.org)
-- [x] skill.md agent instructions
-- [x] SDK renamed to ans-sdk (ready for npm)
-
-### UI/UX
-- [x] Homepage with hero, features, audience sections
-- [x] Stats cards (agent count, online, tags, protocols)
-- [x] Verified badges on profiles
-- [x] Trust score breakdown
+### Infrastructure
+- [x] ans-registry.org (Vercel)
+- [x] api.ans-registry.org (Railway)
+- [x] Postgres on Neon
+- [x] Database indexes
+- [x] skill.md agent docs
+- [x] SDK (ans-sdk, ans-core)
 
 ---
 
-## 🟡 REMAINING (Before Launch)
+## 🟡 POST-LAUNCH
 
-- [x] DNS setup (Phil did this)
-- [x] Vercel env vars (Phil did this)
-- [x] Railway custom domain (Phil did this)
-- [ ] **Publish SDK to npm** — `cd packages/sdk-js && npm publish`
-- [ ] **Redeploy API to Railway** — Get latest code live
+### Would Be Nice
+- [ ] Tag filter UI
+- [ ] Mobile polish
+- [ ] OpenAPI docs
+- [ ] Python SDK
 
----
-
-## 🟢 POST-LAUNCH (Nice to Have)
-
-### High Value
-- [ ] **"Online only" filter** — Show only online agents
-- [ ] **Search by tags** — API supports, UI doesn't expose
-- [ ] **404 page for agents** — Better than "not found" error
-- [ ] **Mobile responsive** — Untested, probably needs work
-
-### Medium Value  
-- [ ] **Leaderboard page** — Top trusted agents
-- [ ] **Activity feed** — Recent registrations, attestations
-- [ ] **API documentation** — OpenAPI/Swagger
-- [ ] **Python SDK** — Many agents run Python
-
-### Lower Priority
-- [ ] **Agent avatars upload** — Currently URL only
-- [ ] **Export agent card** — Shareable profile badge
-- [ ] **Dark mode** — Because why not
-- [ ] **Notifications** — "Someone attested to you"
-- [ ] **Agent messaging** — Agents message each other via registry
-- [ ] **CI/CD** — GitHub Actions
-- [ ] **Error tracking** — Sentry
+### Future
+- [ ] Avatar upload
+- [ ] Shareable profile badges
+- [ ] Dark mode
+- [ ] Notifications
+- [ ] Agent messaging
+- [ ] CI/CD
+- [ ] Error tracking
 
 ---
 
-## 🔵 VISION (Future)
+## 🔵 VISION
 
-- [ ] **Capability marketplace** — Request/offer capabilities
-- [ ] **Agent analytics** — Track queries, discovery
-- [ ] **Protocol spec** — Formal specification document
-- [ ] **Federated registries** — Multiple ANS instances that sync
-- [ ] **Payment escrow** — Hold payments until work done
-- [ ] **Reputation staking** — Stake reputation on attestations
+- [ ] Capability marketplace
+- [ ] Agent analytics
+- [ ] Federated registries
+- [ ] Payment escrow
+- [ ] Reputation staking

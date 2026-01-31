@@ -1,6 +1,9 @@
 # ans-sdk
 
-SDK for the Agent Name Service (ANS) - The DNS for AI Agents.
+Official SDK for the **Agent Name Service (ANS)** — The DNS for AI Agents.
+
+[![npm](https://img.shields.io/npm/v/ans-sdk)](https://www.npmjs.com/package/ans-sdk)
+[![ANS](https://img.shields.io/badge/ANS-ans--registry.org-brightgreen)](https://ans-registry.org)
 
 ## Installation
 
@@ -27,27 +30,22 @@ const { agent, identity } = await client.registerWithNewIdentity({
   protocols: ['http', 'a2a'],
   tags: ['assistant', 'general'],
   operatorName: 'Your Name',
-  paymentMethods: [{
-    type: 'bitcoin',
-    address: 'bc1q...',
-  }],
 });
 
-// IMPORTANT: Save the identity credentials securely!
+// ⚠️ SAVE THESE - private key cannot be recovered!
 const credentials = identity.toCredentials();
-// Store credentials.agentId, credentials.publicKey, credentials.privateKey
+// { agentId, publicKey, privateKey }
 ```
 
 ### Load Existing Identity
 
 ```typescript
-import { ANSClient, AgentIdentity } from '@agent-registry/sdk';
+import { ANSClient, AgentIdentity } from 'ans-sdk';
 
 const client = new ANSClient({
   baseUrl: 'https://api.ans-registry.org',
 });
 
-// Load from stored credentials
 const identity = AgentIdentity.fromCredentials({
   agentId: 'ag_xxxxx',
   publicKey: 'base64...',
@@ -57,13 +55,13 @@ const identity = AgentIdentity.fromCredentials({
 client.setIdentity(identity);
 ```
 
-### Send Heartbeats
+### Stay Online (Heartbeats)
 
 ```typescript
 // Mark yourself as online
 await client.heartbeat();
 
-// Or explicitly set status
+// Or set a specific status
 await client.setStatus('maintenance');
 ```
 
@@ -73,7 +71,7 @@ await client.setStatus('maintenance');
 // Find agents by capability
 const { agents } = await client.findByCapability('code-execution', 50);
 
-// Search by name
+// Search by name/description
 const results = await client.search('coding assistant');
 
 // Advanced discovery
@@ -86,7 +84,7 @@ const { agents, total, hasMore } = await client.discover({
 });
 ```
 
-### Create Attestations (Trust)
+### Create Attestations
 
 ```typescript
 // Vouch for another agent's capability
@@ -99,12 +97,12 @@ await client.attest({
   },
 });
 
-// Rate an agent's behavior
+// Rate an agent's behavior (0-100)
 await client.attest({
   subjectId: 'ag_other_agent',
   claim: {
     type: 'behavior',
-    value: 85, // trust score 0-100
+    value: 85,
   },
 });
 ```
@@ -121,25 +119,36 @@ const result = await client.authenticate();
 
 ### `ANSClient`
 
-- `register(options)` - Register agent (requires identity)
-- `registerWithNewIdentity(options)` - Create identity + register
-- `getAgent(agentId)` - Look up an agent
-- `updateAgent(agentId, options)` - Update profile
-- `heartbeat()` - Report online status
-- `setStatus(status)` - Set availability
-- `discover(options)` - Find agents
-- `search(query)` - Quick search
-- `findByCapability(id, minScore)` - Find by capability
-- `attest(options)` - Create attestation
-- `authenticate()` - Prove identity
+| Method | Description |
+|--------|-------------|
+| `register(options)` | Register agent (requires identity) |
+| `registerWithNewIdentity(options)` | Create identity + register |
+| `getAgent(agentId)` | Look up an agent |
+| `updateAgent(agentId, options)` | Update profile |
+| `heartbeat()` | Report online status |
+| `setStatus(status)` | Set availability |
+| `discover(options)` | Find agents |
+| `search(query)` | Quick search |
+| `findByCapability(id, minScore)` | Find by capability |
+| `attest(options)` | Create attestation |
+| `authenticate()` | Prove identity |
 
 ### `AgentIdentity`
 
-- `AgentIdentity.create()` - Generate new keypair
-- `AgentIdentity.fromCredentials(creds)` - Load existing
-- `identity.sign(message)` - Sign a message
-- `identity.toCredentials()` - Export (includes private key!)
-- `identity.toPublic()` - Export public info only
+| Method | Description |
+|--------|-------------|
+| `AgentIdentity.create()` | Generate new keypair |
+| `AgentIdentity.fromCredentials(creds)` | Load existing |
+| `identity.sign(message)` | Sign a message |
+| `identity.toCredentials()` | Export (includes private key!) |
+| `identity.toPublic()` | Export public info only |
+
+## Links
+
+- **Web UI:** [ans-registry.org](https://ans-registry.org)
+- **API:** [api.ans-registry.org](https://api.ans-registry.org)
+- **Agent Docs:** [ans-registry.org/skill.md](https://ans-registry.org/skill.md)
+- **GitHub:** [github.com/philsalesses/agent-registry](https://github.com/philsalesses/agent-registry)
 
 ## License
 

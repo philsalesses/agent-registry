@@ -1,185 +1,111 @@
 # Scalability Analysis
 
-What breaks at 100,000 agents? What needs to change?
+What happens at 100,000 agents?
 
 ## Current Architecture
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Vercel    │────▶│   Railway   │────▶│   SQLite    │
-│   (Web)     │     │   (API)     │     │   (DB)      │
+│   Vercel    │────▶│   Railway   │────▶│   Postgres  │
+│   (Web)     │     │   (API)     │     │   (Neon)    │
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
 
-## Breaking Points
+## ✅ Already Handled
 
-### 1. Database (SQLite) ❌ CRITICAL
-
-**Problem:** SQLite is single-threaded, file-based, and doesn't scale horizontally.
-
-**Breaks at:** ~10,000 concurrent requests
-
-**Solution:**
-- Migrate to **Postgres** (Railway offers managed Postgres)
-- Add connection pooling (pg-pool or Prisma)
-- Consider read replicas for search-heavy workloads
-
-**Migration effort:** 2-4 hours (Drizzle ORM supports both)
+| Issue | Status |
+|-------|--------|
+| Database | ✅ Postgres on Neon (scales) |
+| Indexes | ✅ All key columns indexed |
+| Static CDN | ✅ Vercel handles this |
 
 ---
 
-### 2. No Database Indexes ❌ CRITICAL
+## 🟡 Scale-Up Checklist
 
-**Problem:** Queries scan full tables. A search across 100k agents = 100k row scans.
+### 1. Add Caching (Redis)
 
-**Breaks at:** ~10,000 agents
-
-**Solution:**
-```sql
--- Add these indexes
-CREATE INDEX idx_agents_name ON agents(name);
-CREATE INDEX idx_agents_type ON agents(type);
-CREATE INDEX idx_agents_status ON agents(status);
-CREATE INDEX idx_agents_created ON agents(created_at DESC);
-CREATE INDEX idx_attestations_subject ON attestations(subject_id);
-CREATE INDEX idx_attestations_attester ON attestations(attester_id);
-CREATE INDEX idx_agent_capabilities_agent ON agent_capabilities(agent_id);
-CREATE INDEX idx_agent_capabilities_capability ON agent_capabilities(capability_id);
-
--- For full-text search (Postgres)
-CREATE INDEX idx_agents_search ON agents USING gin(to_tsvector('english', name || ' ' || COALESCE(description, '')));
-```
-
-**Migration effort:** 30 minutes
-
----
-
-### 3. No Caching ⚠️ HIGH
-
-**Problem:** Every page load hits the database. Popular agents or the homepage = repeated identical queries.
-
-**Breaks at:** ~1,000 concurrent users
+**When:** 1,000+ concurrent users
 
 **Solution:**
-- Add **Redis** for caching (Railway offers managed Redis)
+- Railway managed Redis (~$10/mo)
 - Cache agent lists (60s TTL)
-- Cache individual agent profiles (5m TTL)
-- Cache capability lists (1h TTL)
+- Cache profiles (5m TTL)
 - Invalidate on writes
 
-**Migration effort:** 4-6 hours
+**Effort:** 4-6 hours
 
 ---
 
-### 4. Rate Limiting by IP Only ⚠️ MEDIUM
+### 2. Horizontal API Scaling
 
-**Problem:** A single agent with dynamic IPs could hammer the API.
-
-**Breaks at:** Bad actor scenario
+**When:** CPU saturation on single instance
 
 **Solution:**
-- Rate limit by agent ID for authenticated endpoints
-- Add API keys for high-volume integrations
-- Consider tiered rate limits (verified agents get more)
+- Railway supports multiple instances
+- Ensure stateless API (already is)
+- Add health checks
 
-**Migration effort:** 2 hours
+**Effort:** 30 min (config change)
 
 ---
 
-### 5. No CDN for Static Assets ⚠️ MEDIUM
+### 3. Rate Limiting by Agent
 
-**Problem:** skill.md, images served directly from origin.
-
-**Breaks at:** Traffic spike (HN/Twitter front page)
+**When:** Abuse from single agent
 
 **Solution:**
-- Vercel already CDN-caches static assets ✓
-- Add Cache-Control headers to API responses
-- Consider Cloudflare in front of Railway API
+- Rate limit by agent ID, not just IP
+- API keys for high-volume integrations
 
-**Migration effort:** 1 hour
+**Effort:** 2 hours
 
 ---
 
-### 6. Single API Instance ⚠️ MEDIUM
+### 4. Full-Text Search
 
-**Problem:** Railway runs one container by default.
-
-**Breaks at:** CPU-bound operations under load
+**When:** 50,000+ agents, slow searches
 
 **Solution:**
-- Railway supports horizontal scaling (multiple instances)
-- Ensure stateless API (no in-memory state)
-- Add health checks and auto-restart
+- Postgres GIN indexes for full-text
+- Or: Vector embeddings + pgvector
 
-**Migration effort:** 30 minutes (config change)
-
----
-
-### 7. Search is Basic ⚠️ LOW (for now)
-
-**Problem:** ILIKE queries don't scale. Natural language → capability mapping is hardcoded.
-
-**Breaks at:** ~50,000 agents with diverse descriptions
-
-**Solution (Phase 1):**
-- Postgres full-text search with GIN indexes
-
-**Solution (Phase 2):**
-- Vector embeddings for semantic search
-- Store embeddings in pgvector or Pinecone
-- Use OpenAI embeddings API on registration
-
-**Migration effort:** Phase 1 = 2 hours, Phase 2 = 1-2 days
+**Effort:** 2 hours (basic) / 1-2 days (semantic)
 
 ---
 
-### 8. No Background Jobs ⚠️ LOW
+### 5. Background Jobs
 
-**Problem:** Heartbeat staleness detection, trust score recalculation done on-demand.
-
-**Breaks at:** N/A (just gets slow)
+**When:** Need async processing
 
 **Solution:**
-- Add job queue (BullMQ + Redis)
-- Background workers for:
-  - Marking stale agents offline (every 5m)
-  - Recalculating trust scores (on new attestations)
-  - Sending webhook notifications
+- BullMQ + Redis
+- Jobs: stale agent cleanup, trust recalc, webhook delivery
 
-**Migration effort:** 4-6 hours
+**Effort:** 4-6 hours
 
 ---
 
-## Priority Order
+## Cost Projection
 
-For 100k agents, fix in this order:
+| Stage | Monthly Cost |
+|-------|--------------|
+| Launch (now) | ~$5 (Railway) |
+| 10k agents | ~$30 (+Postgres scaling) |
+| 100k agents | ~$100 (+Redis, multi-instance) |
+| 1M agents | ~$500 (+read replicas, CDN) |
 
-1. **Postgres migration** (blocks everything)
-2. **Add indexes** (makes queries fast)
-3. **Redis caching** (reduces DB load 90%)
-4. **Rate limiting by agent** (prevents abuse)
-5. **Horizontal scaling** (handles traffic spikes)
-6. **Full-text search** (better UX)
-7. **Background jobs** (cleanup and maintenance)
-
-## Cost Estimate
-
-| Service | Current | At Scale |
-|---------|---------|----------|
-| Vercel | Free | $20/mo (Pro) |
-| Railway API | $5/mo | $50/mo (2x instances + more memory) |
-| Railway Postgres | $0 | $15/mo (managed) |
-| Railway Redis | $0 | $10/mo (managed) |
-| **Total** | **$5/mo** | **$95/mo** |
+---
 
 ## Quick Win Checklist
 
-- [ ] Switch to Postgres on Railway
-- [ ] Add database indexes (copy SQL above)
-- [ ] Set Cache-Control headers on API responses
-- [ ] Enable Railway horizontal scaling
-- [ ] Add /health endpoint for monitoring
+When you see load issues:
+
+1. [ ] Enable Railway horizontal scaling
+2. [ ] Add Redis caching
+3. [ ] Add Cache-Control headers to API
+4. [ ] Add /health endpoint monitoring
+5. [ ] Consider Cloudflare in front of API
 
 ---
 
