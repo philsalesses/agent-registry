@@ -10,6 +10,12 @@ export interface AgentKeyPair {
 /**
  * Generate a new agent identity with keypair
  */
+export interface PaymentMethod {
+  type: 'bitcoin' | 'lightning' | 'ethereum' | 'usdc' | 'other';
+  address: string;
+  label?: string;
+}
+
 export interface CreateAgentOptions {
   name: string;
   type?: AgentId['type'];
@@ -21,6 +27,8 @@ export interface CreateAgentOptions {
   homepage?: string;
   operatorId?: string;
   operatorName?: string;
+  /** Payment addresses (controlled by operator, not agent) */
+  paymentMethods?: PaymentMethod[];
 }
 
 export async function createAgentIdentity(
@@ -44,6 +52,7 @@ export async function createAgentIdentity(
       homepage: options.homepage,
       operatorId: options.operatorId,
       operatorName: options.operatorName,
+      paymentMethods: options.paymentMethods || [],
     },
     keypair: {
       agentId,

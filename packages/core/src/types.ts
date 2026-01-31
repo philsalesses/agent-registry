@@ -38,6 +38,15 @@ export const AgentIdSchema = z.object({
   /** Operator name (denormalized for display) */
   operatorName: z.string().optional(),
   
+  // === Payment (controlled by operator, not agent) ===
+  /** Payment methods accepted */
+  paymentMethods: z.array(z.object({
+    type: z.enum(['bitcoin', 'lightning', 'ethereum', 'usdc', 'other']),
+    address: z.string(),
+    /** Optional: human-readable label */
+    label: z.string().optional(),
+  })).default([]),
+  
   // === Status ===
   /** Current availability */
   status: z.enum(['online', 'offline', 'maintenance', 'unknown']).default('unknown'),

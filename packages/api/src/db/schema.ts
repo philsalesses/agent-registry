@@ -24,6 +24,13 @@ export const agents = pgTable('agents', {
   operatorId: text('operator_id'),
   operatorName: text('operator_name'),
   
+  // Payment (controlled by operator, not agent)
+  paymentMethods: jsonb('payment_methods').$type<{
+    type: 'bitcoin' | 'lightning' | 'ethereum' | 'usdc' | 'other';
+    address: string;
+    label?: string;
+  }[]>().default([]),
+  
   // Status
   status: text('status').$type<'online' | 'offline' | 'maintenance' | 'unknown'>().default('unknown'),
   lastSeen: timestamp('last_seen'),

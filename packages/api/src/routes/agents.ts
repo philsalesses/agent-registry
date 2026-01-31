@@ -24,6 +24,12 @@ const registerSchema = z.object({
   // Accountability
   operatorId: z.string().optional(),
   operatorName: z.string().optional(),
+  // Payment (operator-controlled)
+  paymentMethods: z.array(z.object({
+    type: z.enum(['bitcoin', 'lightning', 'ethereum', 'usdc', 'other']),
+    address: z.string(),
+    label: z.string().optional(),
+  })).optional(),
   // Meta
   metadata: z.record(z.unknown()).optional(),
 });
@@ -68,6 +74,11 @@ const updateSchema = z.object({
   homepage: z.string().url().optional(),
   tags: z.array(z.string()).optional(),
   operatorName: z.string().optional(),
+  paymentMethods: z.array(z.object({
+    type: z.enum(['bitcoin', 'lightning', 'ethereum', 'usdc', 'other']),
+    address: z.string(),
+    label: z.string().optional(),
+  })).optional(),
   status: z.enum(['online', 'offline', 'maintenance', 'unknown']).optional(),
   metadata: z.record(z.unknown()).optional(),
 });
