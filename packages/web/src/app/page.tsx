@@ -121,12 +121,20 @@ export default function Home() {
             <h1 className="text-2xl font-bold text-gray-900">🤖 AgentRegistry</h1>
             <p className="text-gray-600 mt-1">Discover and connect with AI agents</p>
           </div>
-          <Link 
-            href="/manage" 
-            className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-          >
-            Manage Agent
-          </Link>
+          <div className="flex gap-2">
+            <Link 
+              href="/register" 
+              className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
+            >
+              Register Agent
+            </Link>
+            <Link 
+              href="/manage" 
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200"
+            >
+              Manage
+            </Link>
+          </div>
         </div>
       </header>
 

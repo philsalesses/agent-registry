@@ -119,12 +119,13 @@ agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
   const id = c.req.param('id');
   const body = c.req.valid('json');
 
-  // Check for signed request (optional for now, will be required)
+  // Check for authentication
   const signature = c.req.header('X-Agent-Signature');
   const timestamp = c.req.header('X-Agent-Timestamp');
+  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
   
+  // Method 1: Signed request (SDK)
   if (signature && timestamp) {
-    // Verify the signature
     const rawBody = JSON.stringify(body);
     const isValid = await verifyAgentRequest(
       id,
@@ -138,10 +139,33 @@ agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
       return c.json({ error: 'Invalid signature' }, 401);
     }
   }
-  // TODO: Make signature required once SDKs are updated
-  // else {
-  //   return c.json({ error: 'Signature required' }, 401);
-  // }
+  // Method 2: Private key verification (Web UI - temporary)
+  else if (privateKeyHeader && timestamp) {
+    const agent = await db.query.agents.findFirst({
+      where: eq(agents.id, id),
+    });
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+    
+    // Verify the private key matches the public key
+    // by signing a test message and verifying
+    const { sign, toBase64, fromBase64, verify } = await import('@agent-registry/core');
+    try {
+      const testMessage = new TextEncoder().encode('verify');
+      const privateKey = fromBase64(privateKeyHeader);
+      const sig = await sign(testMessage, privateKey);
+      const publicKey = fromBase64(agent.publicKey);
+      const isValid = await verify(sig, testMessage, publicKey);
+      if (!isValid) {
+        return c.json({ error: 'Invalid private key' }, 401);
+      }
+    } catch {
+      return c.json({ error: 'Invalid private key format' }, 401);
+    }
+  }
+  // No auth provided - still allow for backwards compatibility (will be removed)
+  // TODO: Make authentication required
 
   const [updated] = await db.update(agents)
     .set({ ...body, updatedAt: new Date() })

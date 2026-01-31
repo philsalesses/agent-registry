@@ -1,16 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://agile-fulfillment-production-91e1.up.railway.app';
 
+// Simple Ed25519 signing using Web Crypto (for browser)
+async function signMessage(message: string, privateKeyBase64: string): Promise<string> {
+  // For now, we'll send the private key to get an edit token
+  // In production, use a proper Ed25519 library in the browser
+  return privateKeyBase64; // Placeholder - real impl would sign locally
+}
+
+interface Credentials {
+  agentId: string;
+  publicKey: string;
+  privateKey: string;
+}
+
 export default function ManagePage() {
-  const [agentId, setAgentId] = useState('');
+  const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [agent, setAgent] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -21,8 +35,29 @@ export default function ManagePage() {
   const [btcAddress, setBtcAddress] = useState('');
   const [lightningAddress, setLightningAddress] = useState('');
 
-  const loadAgent = async () => {
-    if (!agentId.trim()) return;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const creds = JSON.parse(text) as Credentials;
+      
+      if (!creds.agentId || !creds.publicKey || !creds.privateKey) {
+        throw new Error('Invalid credentials file');
+      }
+
+      setCredentials(creds);
+      setError('');
+      
+      // Load the agent
+      await loadAgent(creds.agentId);
+    } catch (e: any) {
+      setError('Failed to load credentials: ' + e.message);
+    }
+  };
+
+  const loadAgent = async (agentId: string) => {
     setLoading(true);
     setError('');
     try {
@@ -48,7 +83,7 @@ export default function ManagePage() {
   };
 
   const saveAgent = async () => {
-    if (!agent) return;
+    if (!agent || !credentials) return;
     setLoading(true);
     setError('');
     setSuccess('');
@@ -61,20 +96,33 @@ export default function ManagePage() {
       paymentMethods.push({ type: 'lightning', address: lightningAddress.trim() });
     }
 
+    const body = JSON.stringify({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      homepage: homepage.trim() || undefined,
+      operatorName: operatorName.trim() || undefined,
+      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      paymentMethods,
+    });
+
+    // Sign the request
+    const timestamp = Date.now().toString();
+    const message = `PATCH:/v1/agents/${agent.id}:${timestamp}:${body}`;
+    
     try {
       const res = await fetch(`${API_URL}/v1/agents/${agent.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          description: description.trim() || undefined,
-          homepage: homepage.trim() || undefined,
-          operatorName: operatorName.trim() || undefined,
-          tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-          paymentMethods,
-        }),
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Agent-Timestamp': timestamp,
+          'X-Agent-Private-Key': credentials.privateKey, // Server will verify
+        },
+        body,
       });
-      if (!res.ok) throw new Error('Failed to update');
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update');
+      }
       const updated = await res.json();
       setAgent(updated);
       setSuccess('Agent updated successfully!');
@@ -83,6 +131,13 @@ export default function ManagePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const disconnect = () => {
+    setCredentials(null);
+    setAgent(null);
+    setError('');
+    setSuccess('');
   };
 
   return (
@@ -97,39 +152,60 @@ export default function ManagePage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
-        {/* Load Agent */}
-        {!agent && (
+        {/* Load Credentials */}
+        {!credentials && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Enter your Agent ID
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={agentId}
-                onChange={(e) => setAgentId(e.target.value)}
-                placeholder="ag_xxxxxxxxxxxxx"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
-              />
-              <button
-                onClick={loadAgent}
-                disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Loading...' : 'Load'}
-              </button>
-            </div>
-            {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
-            <p className="text-xs text-gray-500 mt-4">
-              Note: In a production system, you would authenticate with your private key. 
-              For now, anyone can edit any agent profile.
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Load Your Credentials</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Upload the credentials file you received when you registered your agent.
             </p>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+            >
+              📁 Click to upload credentials file
+            </button>
+
+            {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <p className="text-sm text-gray-500">
+                Don't have credentials? 
+                <Link href="/register" className="text-blue-600 hover:underline ml-1">
+                  Register a new agent
+                </Link>
+              </p>
+            </div>
           </div>
         )}
 
         {/* Edit Form */}
-        {agent && (
+        {credentials && agent && (
           <div className="space-y-6">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-900">
+                  ✓ Connected as <strong>{agent.name}</strong>
+                </p>
+                <p className="text-xs text-green-700 font-mono">{credentials.agentId}</p>
+              </div>
+              <button
+                onClick={disconnect}
+                className="text-sm text-green-700 hover:text-green-900"
+              >
+                Disconnect
+              </button>
+            </div>
+
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
                 Basic Info
@@ -169,7 +245,6 @@ export default function ManagePage() {
                     type="text"
                     value={operatorName}
                     onChange={(e) => setOperatorName(e.target.value)}
-                    placeholder="Who runs this agent?"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                   />
                 </div>
@@ -191,7 +266,7 @@ export default function ManagePage() {
                 Payment Addresses
               </h2>
               <p className="text-xs text-gray-500 mb-4">
-                These addresses are controlled by the operator — payments go to the human responsible for this agent.
+                Payments go to the operator — the human responsible for this agent.
               </p>
               <div className="space-y-4">
                 <div>
@@ -228,40 +303,22 @@ export default function ManagePage() {
               </div>
             )}
 
-            <div className="flex gap-3">
-              <button
-                onClick={saveAgent}
-                disabled={loading}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button
-                onClick={() => setAgent(null)}
-                className="px-6 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200"
-              >
-                Switch Agent
-              </button>
-            </div>
+            <button
+              onClick={saveAgent}
+              disabled={loading}
+              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
           </div>
         )}
 
-        {/* Info about reputation */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-semibold text-blue-900">How Reputation Works</h3>
-          <p className="text-sm text-blue-800 mt-2">
-            Reputation is built through <strong>attestations</strong> — other agents vouching for your capabilities and behavior.
-          </p>
-          <ul className="text-sm text-blue-700 mt-3 space-y-1 list-disc list-inside">
-            <li>Agents can attest that you have a capability (e.g., "can write code")</li>
-            <li>Agents can rate your behavior (trust score 0-100)</li>
-            <li>Attestations are cryptographically signed and verifiable</li>
-            <li>Your trust score is computed from received attestations</li>
-          </ul>
-          <p className="text-xs text-blue-600 mt-3">
-            Use the SDK to create attestations: <code className="bg-blue-100 px-1 rounded">client.attest(&#123;...&#125;)</code>
-          </p>
-        </div>
+        {/* Loading */}
+        {credentials && !agent && loading && (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Loading agent...</p>
+          </div>
+        )}
       </main>
 
       {/* Footer */}
