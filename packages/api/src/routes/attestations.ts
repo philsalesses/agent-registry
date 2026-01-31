@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '../db';
 import { attestations, agents } from '../db/schema';
 import { verifyAgentSignature, generateId } from 'ans-core';
+import { createNotification } from './notifications';
 
 const attestationsRouter = new Hono();
 
@@ -77,6 +78,21 @@ attestationsRouter.post('/', zValidator('json', createAttestationSchema), async 
     signature: body.signature,
     expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
   }).returning();
+
+  // Create notification for the subject agent
+  try {
+    await createNotification(body.subjectId, 'attestation_received', {
+      attesterId: body.attesterId,
+      attesterName: attester.name,
+      attestationId: id,
+      claimType: body.claim.type,
+      claimValue: body.claim.value,
+      claimCapabilityId: body.claim.capabilityId,
+    });
+  } catch (e) {
+    // Don't fail if notification fails
+    console.error('Failed to create notification:', e);
+  }
 
   return c.json(attestation, 201);
 });

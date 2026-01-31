@@ -108,3 +108,48 @@ export const challenges = pgTable('challenges', {
   expiresAt: timestamp('expires_at').notNull(),
   usedAt: timestamp('used_at'),
 });
+
+// =============================================================================
+// Notifications
+// =============================================================================
+
+export const notifications = pgTable('notifications', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').references(() => agents.id).notNull(),
+  type: text('type').notNull().$type<'attestation_received' | 'message_received' | 'mention' | 'system'>(),
+  payload: jsonb('payload').$type<{
+    attesterId?: string;
+    attesterName?: string;
+    attestationId?: string;
+    claimType?: string;
+    claimValue?: any;
+    messageId?: string;
+    fromAgentId?: string;
+    fromAgentName?: string;
+    content?: string;
+    [key: string]: any;
+  }>().notNull(),
+  read: boolean('read').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  agentIdx: index('notifications_agent_idx').on(table.agentId),
+  readIdx: index('notifications_read_idx').on(table.read),
+  createdAtIdx: index('notifications_created_at_idx').on(table.createdAt),
+}));
+
+// =============================================================================
+// Messages (Agent-to-Agent communication)
+// =============================================================================
+
+export const messages = pgTable('messages', {
+  id: text('id').primaryKey(),
+  fromAgentId: text('from_agent_id').references(() => agents.id).notNull(),
+  toAgentId: text('to_agent_id').references(() => agents.id).notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  readAt: timestamp('read_at'),
+}, (table) => ({
+  fromAgentIdx: index('messages_from_agent_idx').on(table.fromAgentId),
+  toAgentIdx: index('messages_to_agent_idx').on(table.toAgentId),
+  createdAtIdx: index('messages_created_at_idx').on(table.createdAt),
+}));

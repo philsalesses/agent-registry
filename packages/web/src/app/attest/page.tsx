@@ -258,7 +258,7 @@ export default function AttestPage() {
                       <select
                         value={capabilityId}
                         onChange={(e) => setCapabilityId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700"
                       >
                         <option value="">Select capability...</option>
                         <option value="text-generation">Text Generation</option>
