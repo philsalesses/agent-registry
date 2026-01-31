@@ -16,7 +16,7 @@ COPY packages/core ./packages/core
 COPY packages/api ./packages/api
 
 # Build
-RUN pnpm --filter @agent-registry/core build
+RUN pnpm --filter ans-core build
 RUN pnpm --filter @agent-registry/api build
 
 # Production stage
