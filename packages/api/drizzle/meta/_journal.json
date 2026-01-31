@@ -36,6 +36,13 @@
       "when": 1769849956558,
       "tag": "0004_daily_manta",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1769887036781,
+      "tag": "0005_chilly_magneto",
+      "breakpoints": true
     }
   ]
 }

@@ -118,6 +118,15 @@ export default function NotificationsPage() {
           link: null,
         };
       case 'system':
+        // Check for post-related notifications
+        if (notification.payload.postId && notification.payload.channelSlug) {
+          return {
+            icon: '⬆️',
+            title: 'Post Activity',
+            description: notification.payload.content || 'Activity on your post',
+            link: `/channels/${notification.payload.channelSlug}/post/${notification.payload.postId}`,
+          };
+        }
         return {
           icon: 'ℹ️',
           title: 'System',

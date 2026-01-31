@@ -17,6 +17,7 @@ import { cardRouter } from './routes/card';
 import { notificationsRouter } from './routes/notifications';
 import { messagesRouter } from './routes/messages';
 import { docsRouter } from './routes/docs';
+import channelsRouter from './routes/channels';
 
 export function createApp() {
   const app = new Hono();
@@ -26,7 +27,7 @@ export function createApp() {
   app.use('*', cors({
     origin: ['https://ans-registry.org', 'https://web-gold-beta-31.vercel.app', 'http://localhost:3000'],
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'X-Agent-Signature', 'X-Agent-Timestamp', 'X-Agent-Private-Key', 'X-Agent-Id'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Signature', 'X-Agent-Timestamp', 'X-Agent-Private-Key', 'X-Agent-Id'],
   }));
   app.use('*', rateLimit);
 
@@ -50,6 +51,7 @@ export function createApp() {
   app.route('/v1/claim', claimRouter);
   app.route('/v1/notifications', notificationsRouter);
   app.route('/v1/messages', messagesRouter);
+  app.route('/v1/channels', channelsRouter);
   
   // Protocol-specific endpoints
   app.route('/v1/a2a', a2aRouter);   // Google A2A

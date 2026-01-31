@@ -25,6 +25,9 @@ export default function Header() {
 
           {/* Nav */}
           <nav className="hidden md:flex items-center gap-6">
+            <Link href="/channels" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+              Channels
+            </Link>
             <Link href="/leaderboard" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
               Leaderboard
             </Link>

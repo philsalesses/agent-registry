@@ -150,7 +150,7 @@ export const notifications = pgTable('notifications', {
 }));
 
 // =============================================================================
-// Messages (Agent-to-Agent communication)
+// Messages (Agent-to-Agent communication - Private DMs)
 // =============================================================================
 
 export const messages = pgTable('messages', {
@@ -164,4 +164,107 @@ export const messages = pgTable('messages', {
   fromAgentIdx: index('messages_from_agent_idx').on(table.fromAgentId),
   toAgentIdx: index('messages_to_agent_idx').on(table.toAgentId),
   createdAtIdx: index('messages_created_at_idx').on(table.createdAt),
+}));
+
+// =============================================================================
+// Channels (Public forums like subreddits)
+// =============================================================================
+
+export const channels = pgTable('channels', {
+  id: text('id').primaryKey(), // ch_xxxxxxxxxxxx
+  name: text('name').notNull().unique(),
+  slug: text('slug').notNull().unique(), // URL-friendly name
+  description: text('description'),
+  icon: text('icon'), // emoji or image URL
+  creatorId: text('creator_id').references(() => agents.id).notNull(),
+  
+  // Settings
+  isPublic: boolean('is_public').default(true).notNull(),
+  allowAnonymous: boolean('allow_anonymous').default(false).notNull(),
+  minTrustScore: integer('min_trust_score').default(0).notNull(), // minimum trust to post
+  
+  // Stats (denormalized for performance)
+  memberCount: integer('member_count').default(0).notNull(),
+  postCount: integer('post_count').default(0).notNull(),
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  slugIdx: uniqueIndex('channels_slug_idx').on(table.slug),
+  creatorIdx: index('channels_creator_idx').on(table.creatorId),
+  memberCountIdx: index('channels_member_count_idx').on(table.memberCount),
+}));
+
+// =============================================================================
+// Channel Memberships
+// =============================================================================
+
+export const channelMemberships = pgTable('channel_memberships', {
+  id: text('id').primaryKey(),
+  channelId: text('channel_id').references(() => channels.id).notNull(),
+  agentId: text('agent_id').references(() => agents.id).notNull(),
+  role: text('role').$type<'member' | 'moderator' | 'admin'>().default('member').notNull(),
+  joinedAt: timestamp('joined_at').defaultNow().notNull(),
+}, (table) => ({
+  channelAgentIdx: uniqueIndex('channel_agent_idx').on(table.channelId, table.agentId),
+  agentIdx: index('memberships_agent_idx').on(table.agentId),
+}));
+
+// =============================================================================
+// Posts (Threads in channels)
+// =============================================================================
+
+export const posts = pgTable('posts', {
+  id: text('id').primaryKey(), // post_xxxxxxxxxxxx
+  channelId: text('channel_id').references(() => channels.id).notNull(),
+  authorId: text('author_id').references(() => agents.id).notNull(),
+  
+  // Content
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  
+  // Parent post for replies/threads
+  parentId: text('parent_id'), // null = top-level post, otherwise it's a reply
+  
+  // Voting (denormalized for performance)
+  upvotes: integer('upvotes').default(0).notNull(),
+  downvotes: integer('downvotes').default(0).notNull(),
+  score: integer('score').default(0).notNull(), // upvotes - downvotes
+  
+  // Boost based on author reputation
+  authorTrustScore: integer('author_trust_score').default(0).notNull(),
+  hotScore: integer('hot_score').default(0).notNull(), // algorithm-based ranking
+  
+  // Stats
+  replyCount: integer('reply_count').default(0).notNull(),
+  
+  // Moderation
+  isDeleted: boolean('is_deleted').default(false).notNull(),
+  isPinned: boolean('is_pinned').default(false).notNull(),
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  channelIdx: index('posts_channel_idx').on(table.channelId),
+  authorIdx: index('posts_author_idx').on(table.authorId),
+  parentIdx: index('posts_parent_idx').on(table.parentId),
+  scoreIdx: index('posts_score_idx').on(table.score),
+  hotScoreIdx: index('posts_hot_score_idx').on(table.hotScore),
+  createdAtIdx: index('posts_created_at_idx').on(table.createdAt),
+}));
+
+// =============================================================================
+// Votes (on posts)
+// =============================================================================
+
+export const votes = pgTable('votes', {
+  id: text('id').primaryKey(),
+  postId: text('post_id').references(() => posts.id).notNull(),
+  agentId: text('agent_id').references(() => agents.id).notNull(),
+  value: integer('value').notNull(), // 1 = upvote, -1 = downvote
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  postAgentIdx: uniqueIndex('vote_post_agent_idx').on(table.postId, table.agentId),
+  postIdx: index('votes_post_idx').on(table.postId),
+  agentIdx: index('votes_agent_idx').on(table.agentId),
 }));
