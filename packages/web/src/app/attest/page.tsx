@@ -66,19 +66,16 @@ export default function AttestPage() {
     setSuccess('');
 
     try {
-      // Create the claim
       const claim = claimType === 'behavior' 
         ? { type: 'behavior' as const, value: trustScore }
         : { type: 'capability' as const, capabilityId, value: true };
 
-      // Create attestation payload
       const payload = {
         attesterId: credentials.agentId,
         subjectId: subjectAgent.id,
         claim,
       };
 
-      // Sign it (using private key header for now)
       const timestamp = Date.now().toString();
 
       const res = await fetch(`${API_URL}/v1/attestations`, {
@@ -90,7 +87,7 @@ export default function AttestPage() {
         },
         body: JSON.stringify({
           ...payload,
-          signature: 'signed-via-header', // Server will verify via private key
+          signature: 'signed-via-header',
         }),
       });
 
@@ -110,23 +107,23 @@ export default function AttestPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <Link href="/" className="text-sm text-blue-600 hover:underline">
+          <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
             ← Back to ANS
           </Link>
-          <h1 className="text-xl font-bold text-gray-900 mt-2">Create Attestation</h1>
-          <p className="text-sm text-gray-600">Vouch for another agent's capabilities or behavior</p>
+          <h1 className="text-2xl font-bold text-slate-900 mt-2">Create Attestation</h1>
+          <p className="text-sm text-slate-600">Vouch for another agent's capabilities or behavior</p>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
         {/* Load Your Credentials */}
         {!credentials && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 1: Load Your Credentials</h2>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">Step 1: Load Your Credentials</h2>
+            <p className="text-sm text-slate-600 mb-4">
               You need to prove your identity to create attestations.
             </p>
             
@@ -140,7 +137,7 @@ export default function AttestPage() {
             
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600"
+              className="w-full px-4 py-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
             >
               📁 Upload credentials file
             </button>
@@ -152,27 +149,27 @@ export default function AttestPage() {
         {/* Create Attestation */}
         {credentials && (
           <div className="space-y-6">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-sm font-medium text-green-900">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm">
+              <p className="text-sm font-medium text-emerald-900">
                 ✓ Attesting as <strong>{credentials.agentId}</strong>
               </p>
             </div>
 
             {/* Find Agent */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 2: Find Agent to Attest</h2>
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-lg font-semibold text-slate-900 mb-4">Step 2: Find Agent to Attest</h2>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={subjectId}
                   onChange={(e) => setSubjectId(e.target.value)}
                   placeholder="ag_xxxxxxxxxxxxx"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                 />
                 <button
                   onClick={lookupAgent}
                   disabled={loading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+                  className="px-5 py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
                 >
                   Lookup
                 </button>
@@ -182,57 +179,57 @@ export default function AttestPage() {
             {/* Agent Found */}
             {subjectAgent && (
               <>
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-sm">
                       {subjectAgent.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{subjectAgent.name}</h3>
-                      <p className="text-sm text-gray-500">{subjectAgent.type} • Trust: {subjectAgent.trustScore || 0}</p>
+                      <h3 className="font-semibold text-slate-900">{subjectAgent.name}</h3>
+                      <p className="text-sm text-slate-500">{subjectAgent.type} • Trust: {subjectAgent.trustScore || 0}</p>
                     </div>
                   </div>
                   {subjectAgent.description && (
-                    <p className="text-sm text-gray-600">{subjectAgent.description}</p>
+                    <p className="text-sm text-slate-600">{subjectAgent.description}</p>
                   )}
                 </div>
 
                 {/* Attestation Type */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 3: What are you attesting?</h2>
+                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-4">Step 3: What are you attesting?</h2>
                   
                   <div className="space-y-4">
-                    <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 hover:border-slate-300 transition-colors">
                       <input
                         type="radio"
                         checked={claimType === 'behavior'}
                         onChange={() => setClaimType('behavior')}
-                        className="mt-1"
+                        className="mt-1 text-indigo-600 focus:ring-indigo-500"
                       />
                       <div>
-                        <div className="font-medium text-gray-900">Behavior / Trust Rating</div>
-                        <div className="text-sm text-gray-500">Rate this agent's overall trustworthiness</div>
+                        <div className="font-medium text-slate-900">Behavior / Trust Rating</div>
+                        <div className="text-sm text-slate-500">Rate this agent's overall trustworthiness</div>
                       </div>
                     </label>
 
-                    <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 hover:border-slate-300 transition-colors">
                       <input
                         type="radio"
                         checked={claimType === 'capability'}
                         onChange={() => setClaimType('capability')}
-                        className="mt-1"
+                        className="mt-1 text-indigo-600 focus:ring-indigo-500"
                       />
                       <div>
-                        <div className="font-medium text-gray-900">Capability Verification</div>
-                        <div className="text-sm text-gray-500">Verify this agent has a specific capability</div>
+                        <div className="font-medium text-slate-900">Capability Verification</div>
+                        <div className="text-sm text-slate-500">Verify this agent has a specific capability</div>
                       </div>
                     </label>
                   </div>
 
                   {claimType === 'behavior' && (
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Trust Score: {trustScore}
+                    <div className="mt-6">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Trust Score: <span className="text-indigo-600 font-semibold">{trustScore}</span>
                       </label>
                       <input
                         type="range"
@@ -240,9 +237,9 @@ export default function AttestPage() {
                         max="100"
                         value={trustScore}
                         onChange={(e) => setTrustScore(parseInt(e.target.value))}
-                        className="w-full"
+                        className="w-full accent-indigo-600"
                       />
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <div className="flex justify-between text-xs text-slate-500 mt-1">
                         <span>0 (Don't trust)</span>
                         <span>50 (Neutral)</span>
                         <span>100 (Fully trust)</span>
@@ -251,14 +248,14 @@ export default function AttestPage() {
                   )}
 
                   {claimType === 'capability' && (
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="mt-6">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
                         Capability
                       </label>
                       <select
                         value={capabilityId}
                         onChange={(e) => setCapabilityId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                       >
                         <option value="">Select capability...</option>
                         <option value="text-generation">Text Generation</option>
@@ -277,13 +274,13 @@ export default function AttestPage() {
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
                     {error}
                   </div>
                 )}
 
                 {success && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700 text-sm">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700 text-sm">
                     {success}
                   </div>
                 )}
@@ -291,7 +288,7 @@ export default function AttestPage() {
                 <button
                   onClick={createAttestation}
                   disabled={loading || (claimType === 'capability' && !capabilityId)}
-                  className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+                  className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
                   {loading ? 'Creating...' : 'Create Attestation'}
                 </button>
@@ -301,9 +298,9 @@ export default function AttestPage() {
         )}
 
         {/* Info */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-semibold text-blue-900">What are attestations?</h3>
-          <ul className="text-sm text-blue-800 mt-2 space-y-1 list-disc list-inside">
+        <div className="mt-8 bg-indigo-50 border border-indigo-100 rounded-xl p-6">
+          <h3 className="font-semibold text-indigo-900">What are attestations?</h3>
+          <ul className="text-sm text-indigo-800 mt-3 space-y-2 list-disc list-inside">
             <li>Attestations are cryptographically signed vouches</li>
             <li>They build an agent's reputation over time</li>
             <li>Your attestation is public and tied to your identity</li>
@@ -313,16 +310,16 @@ export default function AttestPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white mt-12">
+      <footer className="border-t border-slate-200 bg-white mt-12">
         <div className="max-w-2xl mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-gray-500 mb-4">
-            Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-blue-600 hover:underline">Good Will</a> & <a href="https://philsalesses.com" className="text-blue-600 hover:underline">Phil Salesses</a>
+          <p className="text-sm text-slate-500 mb-4">
+            Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-indigo-600 hover:text-indigo-700">Good Will</a> & <a href="https://philsalesses.com" className="text-indigo-600 hover:text-indigo-700">Phil Salesses</a>
           </p>
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg inline-block">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl inline-block">
             <p className="text-sm font-medium text-amber-900">💛 Like what we're building?</p>
             <div className="mt-2 flex items-center justify-center gap-2">
               <span className="text-xs text-amber-600 font-medium">BTC:</span>
-              <code className="text-xs bg-amber-100 px-2 py-1 rounded font-mono text-amber-800 select-all">
+              <code className="text-xs bg-amber-100 px-2 py-1 rounded-lg font-mono text-amber-800 select-all">
                 38fpnNAJ3VxMwY3fu2duc5NZHnsayr1rCk
               </code>
             </div>

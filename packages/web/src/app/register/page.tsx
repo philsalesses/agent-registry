@@ -63,24 +63,24 @@ export default function RegisterPage() {
 
   if (credentials) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white border-b border-gray-200">
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+        <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
           <div className="max-w-2xl mx-auto px-4 py-4">
-            <Link href="/" className="text-sm text-blue-600 hover:underline">
+            <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
               ← Back to ANS
             </Link>
           </div>
         </header>
 
         <main className="max-w-2xl mx-auto px-4 py-8">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-            <h1 className="text-xl font-bold text-green-900">🎉 Agent Registered!</h1>
-            <p className="text-green-700 mt-2">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 mb-6 shadow-sm">
+            <h1 className="text-xl font-bold text-emerald-900">🎉 Agent Registered!</h1>
+            <p className="text-emerald-700 mt-2">
               Your agent <strong>{credentials.agent.name}</strong> has been created.
             </p>
           </div>
 
-          <div className="bg-red-50 border border-red-300 rounded-lg p-6 mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6 shadow-sm">
             <h2 className="text-lg font-bold text-red-900">⚠️ SAVE YOUR CREDENTIALS</h2>
             <p className="text-red-700 mt-2">
               Download and securely store your credentials file. 
@@ -88,32 +88,32 @@ export default function RegisterPage() {
             </p>
             <button
               onClick={downloadCredentials}
-              className="mt-4 px-6 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700"
+              className="mt-4 px-6 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors shadow-sm"
             >
               Download Credentials File
             </button>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
               Your Credentials
             </h2>
             <div className="space-y-3 text-sm">
               <div>
-                <span className="text-gray-500">Agent ID:</span>
-                <code className="ml-2 bg-gray-100 px-2 py-1 rounded font-mono">
+                <span className="text-slate-500">Agent ID:</span>
+                <code className="ml-2 bg-slate-100 px-2 py-1 rounded-lg font-mono text-slate-700">
                   {credentials.credentials.agentId}
                 </code>
               </div>
               <div>
-                <span className="text-gray-500">Public Key:</span>
-                <code className="ml-2 bg-gray-100 px-2 py-1 rounded font-mono text-xs break-all">
+                <span className="text-slate-500">Public Key:</span>
+                <code className="ml-2 bg-slate-100 px-2 py-1 rounded-lg font-mono text-xs text-slate-700 break-all">
                   {credentials.credentials.publicKey.substring(0, 32)}...
                 </code>
               </div>
               <div>
-                <span className="text-gray-500">Private Key:</span>
-                <code className="ml-2 bg-red-100 px-2 py-1 rounded font-mono text-xs">
+                <span className="text-slate-500">Private Key:</span>
+                <code className="ml-2 bg-red-100 px-2 py-1 rounded-lg font-mono text-xs text-red-700">
                   [HIDDEN - in downloaded file]
                 </code>
               </div>
@@ -123,13 +123,13 @@ export default function RegisterPage() {
           <div className="mt-6 flex gap-3">
             <Link
               href={`/agent/${credentials.credentials.agentId}`}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+              className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
             >
               View Your Agent
             </Link>
             <Link
               href="/manage"
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200"
+              className="px-5 py-2.5 bg-white text-slate-700 rounded-xl text-sm font-medium border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors"
             >
               Edit Profile
             </Link>
@@ -140,22 +140,22 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <Link href="/" className="text-sm text-blue-600 hover:underline">
+          <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
             ← Back to ANS
           </Link>
-          <h1 className="text-xl font-bold text-gray-900 mt-2">Register Your Agent</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mt-2">Register Your Agent</h1>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
         <form onSubmit={handleRegister} className="space-y-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Agent Name *
                 </label>
                 <input
@@ -163,19 +163,19 @@ export default function RegisterPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="My Awesome Agent"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Type
                 </label>
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                 >
                   <option value="assistant">Assistant (conversational AI)</option>
                   <option value="autonomous">Autonomous (self-directed)</option>
@@ -185,7 +185,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Description
                 </label>
                 <textarea
@@ -193,12 +193,12 @@ export default function RegisterPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="What does your agent do?"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Operator Name
                 </label>
                 <input
@@ -206,14 +206,14 @@ export default function RegisterPage() {
                   value={operatorName}
                   onChange={(e) => setOperatorName(e.target.value)}
                   placeholder="Who runs this agent?"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                 />
               </div>
             </div>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
               {error}
             </div>
           )}
@@ -221,15 +221,15 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+            className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
           >
             {loading ? 'Registering...' : 'Register Agent'}
           </button>
         </form>
 
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-semibold text-blue-900">How it works</h3>
-          <ol className="text-sm text-blue-800 mt-2 space-y-2 list-decimal list-inside">
+        <div className="mt-8 bg-indigo-50 border border-indigo-100 rounded-xl p-6">
+          <h3 className="font-semibold text-indigo-900">How it works</h3>
+          <ol className="text-sm text-indigo-800 mt-3 space-y-2 list-decimal list-inside">
             <li>Register your agent and receive a credentials file</li>
             <li>Save the credentials securely (private key cannot be recovered!)</li>
             <li>Use the credentials to edit your profile and prove ownership</li>

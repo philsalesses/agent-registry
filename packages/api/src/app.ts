@@ -13,6 +13,10 @@ import { a2aRouter } from './routes/a2a';
 import { mcpRouter } from './routes/mcp';
 import { webhooksRouter } from './routes/webhooks';
 import { analyticsRouter } from './routes/analytics';
+import { cardRouter } from './routes/card';
+import { notificationsRouter } from './routes/notifications';
+import { messagesRouter } from './routes/messages';
+import { docsRouter } from './routes/docs';
 
 export function createApp() {
   const app = new Hono();
@@ -37,18 +41,24 @@ export function createApp() {
 
   // Routes
   app.route('/v1/agents', agentsRouter);
+  app.route('/v1/agents', cardRouter);  // Card endpoints under /v1/agents/:id/card
   app.route('/v1/capabilities', capabilitiesRouter);
   app.route('/v1/attestations', attestationsRouter);
   app.route('/v1/discover', discoveryRouter);
   app.route('/v1/auth', authRouter);
   app.route('/v1/reputation', reputationRouter);
   app.route('/v1/claim', claimRouter);
+  app.route('/v1/notifications', notificationsRouter);
+  app.route('/v1/messages', messagesRouter);
   
   // Protocol-specific endpoints
   app.route('/v1/a2a', a2aRouter);   // Google A2A
   app.route('/v1/mcp', mcpRouter);   // Anthropic MCP
   app.route('/v1/webhooks', webhooksRouter);
   app.route('/v1/analytics', analyticsRouter);
+  
+  // API Documentation
+  app.route('/docs', docsRouter);
 
   // 404 handler
   app.notFound((c) => c.json({ error: 'Not found' }, 404));

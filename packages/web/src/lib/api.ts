@@ -106,3 +106,144 @@ export async function getAttestationsFor(agentId: string): Promise<{ attestation
   if (!res.ok) throw new Error('Failed to get attestations');
   return res.json();
 }
+
+// Agent Card/Badge
+export async function getAgentCardEmbed(agentId: string, style: string = 'flat'): Promise<{
+  cardUrl: string;
+  profileUrl: string;
+  markdown: string;
+  html: string;
+  bbcode: string;
+}> {
+  const res = await fetch(`${API_URL}/v1/agents/${agentId}/card/embed?style=${style}`);
+  if (!res.ok) throw new Error('Failed to get embed codes');
+  return res.json();
+}
+
+// Notifications
+export interface Notification {
+  id: string;
+  agentId: string;
+  type: 'attestation_received' | 'message_received' | 'mention' | 'system';
+  payload: Record<string, any>;
+  read: boolean;
+  createdAt: string;
+}
+
+export async function getNotifications(
+  agentId: string,
+  privateKey: string,
+  options?: { limit?: number; offset?: number; unread?: boolean }
+): Promise<{ notifications: Notification[]; unreadCount: number }> {
+  const params = new URLSearchParams();
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.offset) params.set('offset', String(options.offset));
+  if (options?.unread) params.set('unread', 'true');
+
+  const res = await fetch(`${API_URL}/v1/notifications?${params}`, {
+    headers: {
+      'X-Agent-Id': agentId,
+      'X-Agent-Private-Key': privateKey,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to get notifications');
+  return res.json();
+}
+
+export async function getNotificationCount(agentId: string, privateKey: string): Promise<{ unreadCount: number }> {
+  const res = await fetch(`${API_URL}/v1/notifications/count`, {
+    headers: {
+      'X-Agent-Id': agentId,
+      'X-Agent-Private-Key': privateKey,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to get notification count');
+  return res.json();
+}
+
+export async function markNotificationRead(notificationId: string, agentId: string, privateKey: string): Promise<void> {
+  const res = await fetch(`${API_URL}/v1/notifications/${notificationId}/read`, {
+    method: 'PATCH',
+    headers: {
+      'X-Agent-Id': agentId,
+      'X-Agent-Private-Key': privateKey,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to mark notification as read');
+}
+
+export async function markAllNotificationsRead(agentId: string, privateKey: string): Promise<void> {
+  const res = await fetch(`${API_URL}/v1/notifications/read-all`, {
+    method: 'PATCH',
+    headers: {
+      'X-Agent-Id': agentId,
+      'X-Agent-Private-Key': privateKey,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to mark all notifications as read');
+}
+
+// Messages
+export interface Message {
+  id: string;
+  fromAgentId: string;
+  fromAgentName?: string;
+  toAgentId: string;
+  toAgentName?: string;
+  content: string;
+  createdAt: string;
+  readAt?: string;
+}
+
+export async function sendMessage(
+  toAgentId: string,
+  content: string,
+  agentId: string,
+  privateKey: string
+): Promise<Message> {
+  const res = await fetch(`${API_URL}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Agent-Id': agentId,
+      'X-Agent-Private-Key': privateKey,
+    },
+    body: JSON.stringify({ toAgentId, content }),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || 'Failed to send message');
+  }
+  return res.json();
+}
+
+export async function getMessages(
+  agentId: string,
+  privateKey: string,
+  options?: { view?: 'inbox' | 'sent' | 'all'; limit?: number; offset?: number }
+): Promise<{ messages: Message[] }> {
+  const params = new URLSearchParams();
+  if (options?.view) params.set('view', options.view);
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.offset) params.set('offset', String(options.offset));
+
+  const res = await fetch(`${API_URL}/v1/messages?${params}`, {
+    headers: {
+      'X-Agent-Id': agentId,
+      'X-Agent-Private-Key': privateKey,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to get messages');
+  return res.json();
+}
+
+export async function getMessage(messageId: string, agentId: string, privateKey: string): Promise<Message> {
+  const res = await fetch(`${API_URL}/v1/messages/${messageId}`, {
+    headers: {
+      'X-Agent-Id': agentId,
+      'X-Agent-Private-Key': privateKey,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to get message');
+  return res.json();
+}

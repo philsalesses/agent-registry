@@ -5,13 +5,6 @@ import Link from 'next/link';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
-// Simple Ed25519 signing using Web Crypto (for browser)
-async function signMessage(message: string, privateKeyBase64: string): Promise<string> {
-  // For now, we'll send the private key to get an edit token
-  // In production, use a proper Ed25519 library in the browser
-  return privateKeyBase64; // Placeholder - real impl would sign locally
-}
-
 interface Credentials {
   agentId: string;
   publicKey: string;
@@ -50,7 +43,6 @@ export default function ManagePage() {
       setCredentials(creds);
       setError('');
       
-      // Load the agent
       await loadAgent(creds.agentId);
     } catch (e: any) {
       setError('Failed to load credentials: ' + e.message);
@@ -105,9 +97,7 @@ export default function ManagePage() {
       paymentMethods,
     });
 
-    // Sign the request
     const timestamp = Date.now().toString();
-    const message = `PATCH:/v1/agents/${agent.id}:${timestamp}:${body}`;
     
     try {
       const res = await fetch(`${API_URL}/v1/agents/${agent.id}`, {
@@ -115,7 +105,7 @@ export default function ManagePage() {
         headers: { 
           'Content-Type': 'application/json',
           'X-Agent-Timestamp': timestamp,
-          'X-Agent-Private-Key': credentials.privateKey, // Server will verify
+          'X-Agent-Private-Key': credentials.privateKey,
         },
         body,
       });
@@ -141,22 +131,22 @@ export default function ManagePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <Link href="/" className="text-sm text-blue-600 hover:underline">
+          <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
             ← Back to ANS
           </Link>
-          <h1 className="text-xl font-bold text-gray-900 mt-2">Manage Your Agent</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mt-2">Manage Your Agent</h1>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
         {/* Load Credentials */}
         {!credentials && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Load Your Credentials</h2>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">Load Your Credentials</h2>
+            <p className="text-sm text-slate-600 mb-4">
               Upload the credentials file you received when you registered your agent.
             </p>
             
@@ -170,17 +160,17 @@ export default function ManagePage() {
             
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+              className="w-full px-4 py-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
             >
               📁 Click to upload credentials file
             </button>
 
             {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
 
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <p className="text-sm text-slate-500">
                 Don't have credentials? 
-                <Link href="/register" className="text-blue-600 hover:underline ml-1">
+                <Link href="/register" className="text-indigo-600 hover:text-indigo-700 font-medium ml-1">
                   Register a new agent
                 </Link>
               </p>
@@ -191,114 +181,114 @@ export default function ManagePage() {
         {/* Edit Form */}
         {credentials && agent && (
           <div className="space-y-6">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
               <div>
-                <p className="text-sm font-medium text-green-900">
+                <p className="text-sm font-medium text-emerald-900">
                   ✓ Connected as <strong>{agent.name}</strong>
                 </p>
-                <p className="text-xs text-green-700 font-mono">{credentials.agentId}</p>
+                <p className="text-xs text-emerald-700 font-mono">{credentials.agentId}</p>
               </div>
               <button
                 onClick={disconnect}
-                className="text-sm text-green-700 hover:text-green-900"
+                className="text-sm text-emerald-700 hover:text-emerald-900 font-medium"
               >
                 Disconnect
               </button>
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
                 Basic Info
               </h2>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Homepage URL</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Homepage URL</label>
                   <input
                     type="url"
                     value={homepage}
                     onChange={(e) => setHomepage(e.target.value)}
                     placeholder="https://..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Operator Name</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Operator Name</label>
                   <input
                     type="text"
                     value={operatorName}
                     onChange={(e) => setOperatorName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Tags (comma-separated)</label>
                   <input
                     type="text"
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
                     placeholder="assistant, coding, research"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
                 Payment Addresses
               </h2>
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-xs text-slate-500 mb-4">
                 Payments go to the operator — the human responsible for this agent.
               </p>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bitcoin Address</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Bitcoin Address</label>
                   <input
                     type="text"
                     value={btcAddress}
                     onChange={(e) => setBtcAddress(e.target.value)}
                     placeholder="bc1q... or 3..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Lightning Address</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Lightning Address</label>
                   <input
                     type="text"
                     value={lightningAddress}
                     onChange={(e) => setLightningAddress(e.target.value)}
                     placeholder="name@getalby.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   />
                 </div>
               </div>
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
                 {error}
               </div>
             )}
             {success && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700 text-sm">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700 text-sm">
                 {success}
               </div>
             )}
@@ -306,7 +296,7 @@ export default function ManagePage() {
             <button
               onClick={saveAgent}
               disabled={loading}
-              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+              className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               {loading ? 'Saving...' : 'Save Changes'}
             </button>
@@ -316,23 +306,23 @@ export default function ManagePage() {
         {/* Loading */}
         {credentials && !agent && loading && (
           <div className="text-center py-12">
-            <p className="text-gray-500">Loading agent...</p>
+            <p className="text-slate-500">Loading agent...</p>
           </div>
         )}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white mt-12">
+      <footer className="border-t border-slate-200 bg-white mt-12">
         <div className="max-w-2xl mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-gray-500 mb-4">
-            Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-blue-600 hover:underline">Good Will</a> & <a href="https://philsalesses.com" className="text-blue-600 hover:underline">Phil Salesses</a>
+          <p className="text-sm text-slate-500 mb-4">
+            Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-indigo-600 hover:text-indigo-700">Good Will</a> & <a href="https://philsalesses.com" className="text-indigo-600 hover:text-indigo-700">Phil Salesses</a>
           </p>
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg inline-block">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl inline-block">
             <p className="text-sm font-medium text-amber-900">💛 Like what we're building?</p>
             <p className="text-sm text-amber-700 mt-1">Support us to keep it going:</p>
             <div className="mt-2 flex items-center justify-center gap-2">
               <span className="text-xs text-amber-600 font-medium">BTC:</span>
-              <code className="text-xs bg-amber-100 px-2 py-1 rounded font-mono text-amber-800 select-all">
+              <code className="text-xs bg-amber-100 px-2 py-1 rounded-lg font-mono text-amber-800 select-all">
                 38fpnNAJ3VxMwY3fu2duc5NZHnsayr1rCk
               </code>
             </div>
