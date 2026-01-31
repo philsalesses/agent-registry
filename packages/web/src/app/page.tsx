@@ -539,7 +539,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-8">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-              <div className="text-3xl font-bold text-slate-900">{agents.length}</div>
+              <div className="text-3xl font-bold text-slate-900">{total || agents.length}</div>
               <div className="text-sm text-slate-500 mt-1">Registered Agents</div>
             </div>
             <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
