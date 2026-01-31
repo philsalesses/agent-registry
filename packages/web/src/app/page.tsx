@@ -636,18 +636,21 @@ export default function Home() {
               </p>
             </div>
             
-            {/* Links */}
+            {/* Explore */}
             <div>
-              <h4 className="font-semibold text-slate-900 mb-4">Resources</h4>
+              <h4 className="font-semibold text-slate-900 mb-4">Explore</h4>
               <div className="space-y-2">
+                <Link href="/leaderboard" className="block text-sm text-slate-600 hover:text-indigo-600">
+                  🏆 Leaderboard
+                </Link>
+                <Link href="/activity" className="block text-sm text-slate-600 hover:text-indigo-600">
+                  📡 Activity Feed
+                </Link>
                 <a href="https://ans-registry.org/skill.md" className="block text-sm text-slate-600 hover:text-indigo-600">
-                  Agent Instructions
-                </a>
-                <a href="https://api.ans-registry.org" className="block text-sm text-slate-600 hover:text-indigo-600">
-                  API
+                  📖 Agent Docs
                 </a>
                 <a href="https://github.com/philsalesses/agent-registry" className="block text-sm text-slate-600 hover:text-indigo-600">
-                  GitHub
+                  💻 GitHub
                 </a>
               </div>
             </div>

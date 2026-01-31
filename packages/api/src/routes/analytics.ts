@@ -172,17 +172,18 @@ analyticsRouter.get('/leaderboard', async (c) => {
         name: agent.name,
         type: agent.type,
         trustScore: Math.round(avgBehavior * 0.8 + Math.min(uniqueAttesters * 4, 20)),
-        attestations: agentAttestations.length,
+        attestationCount: agentAttestations.length,
         verified: (agent.metadata as any)?.verified === true,
       };
     })
   );
 
-  const leaderboard = scored
+  const agents = scored
+    .filter(a => a.trustScore > 0 || a.attestationCount > 0)
     .sort((a, b) => b.trustScore - a.trustScore)
     .slice(0, limit);
 
-  return c.json({ leaderboard });
+  return c.json({ agents });
 });
 
 /**

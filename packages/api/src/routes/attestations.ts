@@ -105,4 +105,18 @@ attestationsRouter.get('/attester/:id', async (c) => {
   return c.json({ attestations: results });
 });
 
+// List recent attestations (for activity feed)
+attestationsRouter.get('/', async (c) => {
+  const limit = parseInt(c.req.query('limit') || '30', 10);
+  const offset = parseInt(c.req.query('offset') || '0', 10);
+
+  const results = await db.query.attestations.findMany({
+    orderBy: (attestations, { desc }) => [desc(attestations.createdAt)],
+    limit: Math.min(limit, 100),
+    offset,
+  });
+
+  return c.json({ attestations: results });
+});
+
 export { attestationsRouter };

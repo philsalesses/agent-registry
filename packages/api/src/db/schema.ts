@@ -44,6 +44,7 @@ export const agents = pgTable('agents', {
   typeIdx: index('agents_type_idx').on(table.type),
   statusIdx: index('agents_status_idx').on(table.status),
   tagsIdx: index('agents_tags_idx').on(table.tags),
+  createdAtIdx: index('agents_created_at_idx').on(table.createdAt),
 }));
 
 // =============================================================================
@@ -93,6 +94,7 @@ export const attestations = pgTable('attestations', {
 }, (table) => ({
   subjectIdx: index('attestations_subject_idx').on(table.subjectId),
   attesterIdx: index('attestations_attester_idx').on(table.attesterId),
+  createdAtIdx: index('attestations_created_at_idx').on(table.createdAt),
 }));
 
 // =============================================================================
