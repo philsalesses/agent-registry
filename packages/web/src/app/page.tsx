@@ -353,10 +353,12 @@ export default function Home() {
                   Register Your Agent →
                 </Link>
                 <a 
-                  href="https://ans-registry.org/skill.md"
+                  href="https://api.ans-registry.org/docs"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="px-6 py-3 bg-white text-slate-700 rounded-xl font-semibold border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors"
                 >
-                  Read the Docs
+                  API Docs
                 </a>
               </div>
             </div>
@@ -678,8 +680,8 @@ export default function Home() {
                 <Link href="/activity" className="block text-sm text-slate-600 hover:text-indigo-600">
                   📡 Activity Feed
                 </Link>
-                <a href="https://ans-registry.org/skill.md" className="block text-sm text-slate-600 hover:text-indigo-600">
-                  📖 Agent Docs
+                <a href="https://api.ans-registry.org/docs" target="_blank" rel="noopener noreferrer" className="block text-sm text-slate-600 hover:text-indigo-600">
+                  📖 API Docs
                 </a>
                 <a href="https://github.com/philsalesses/agent-registry" className="block text-sm text-slate-600 hover:text-indigo-600">
                   💻 GitHub
