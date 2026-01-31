@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Agent } from '@/lib/api';
 import { NotificationBell } from './components/NotificationBell';
 
@@ -149,6 +149,12 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Agent[] | null>(null);
   const [searchSuggestion, setSearchSuggestion] = useState<string | null>(null);
+  const [typeaheadResults, setTypeaheadResults] = useState<Agent[]>([]);
+  const [showTypeahead, setShowTypeahead] = useState(false);
+  const [typeaheadLoading, setTypeaheadLoading] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const typeaheadRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showHero, setShowHero] = useState(true);
   const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
   const [onlineOnly, setOnlineOnly] = useState(false);
@@ -160,6 +166,64 @@ export default function Home() {
 
   useEffect(() => {
     loadAgents(0);
+  }, []);
+
+  // Typeahead search as you type
+  const doTypeahead = useCallback(async (q: string) => {
+    if (!q.trim() || q.length < 2) {
+      setTypeaheadResults([]);
+      return;
+    }
+    
+    setTypeaheadLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/v1/discover/search?q=${encodeURIComponent(q)}&limit=6`);
+      if (res.ok) {
+        const data = await res.json();
+        setTypeaheadResults(data.agents || []);
+      }
+    } catch {
+      setTypeaheadResults([]);
+    } finally {
+      setTypeaheadLoading(false);
+    }
+  }, []);
+
+  // Debounced typeahead
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    
+    if (searchQuery.trim().length >= 2) {
+      debounceRef.current = setTimeout(() => {
+        doTypeahead(searchQuery);
+      }, 200);
+    } else {
+      setTypeaheadResults([]);
+    }
+    
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [searchQuery, doTypeahead]);
+
+  // Close typeahead on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        typeaheadRef.current && 
+        !typeaheadRef.current.contains(event.target as Node) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(event.target as Node)
+      ) {
+        setShowTypeahead(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const loadAgents = async (
@@ -476,12 +540,77 @@ export default function Home() {
         <form onSubmit={handleSearch} className="flex gap-3">
           <div className="flex-1 relative">
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by capability: 'coding', 'research', 'image generation'..."
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowTypeahead(true);
+              }}
+              onFocus={() => setShowTypeahead(true)}
+              placeholder="Search agents by name, capability, or paste an agent ID..."
               className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
             />
+            
+            {/* Typeahead Dropdown */}
+            {showTypeahead && (typeaheadResults.length > 0 || typeaheadLoading) && searchQuery.length >= 2 && (
+              <div
+                ref={typeaheadRef}
+                className="absolute z-50 w-full mt-2 bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden"
+              >
+                {typeaheadLoading && typeaheadResults.length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Searching...
+                  </div>
+                ) : (
+                  <ul className="max-h-80 overflow-y-auto">
+                    {typeaheadResults.map((agent) => (
+                      <li key={agent.id}>
+                        <Link
+                          href={`/agent/${agent.id}`}
+                          onClick={() => setShowTypeahead(false)}
+                          className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors"
+                        >
+                          {/* Avatar */}
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0 overflow-hidden">
+                            {agent.avatar ? (
+                              <img src={agent.avatar} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              agent.name.charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-slate-900 truncate">{agent.name}</span>
+                              {agent.verified && (
+                                <span className="text-emerald-500" title="Verified">✓</span>
+                              )}
+                              <StatusDot status={agent.status} />
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">
+                              {agent.type}{agent.trustScore !== undefined && ` • Trust: ${agent.trustScore}`}
+                            </div>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                    <li className="border-t border-slate-100">
+                      <button
+                        type="submit"
+                        className="w-full px-4 py-3 text-sm text-indigo-600 hover:bg-indigo-50 text-left font-medium"
+                      >
+                        Search all for "{searchQuery}" →
+                      </button>
+                    </li>
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
           <button
             type="submit"

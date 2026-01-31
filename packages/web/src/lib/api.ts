@@ -29,6 +29,8 @@ export interface Agent {
   operatorName?: string;
   linkedProfiles?: LinkedProfiles;
   verificationTier?: number;
+  verified?: boolean;
+  trustScore?: number;
   capabilities?: AgentCapability[];
   paymentMethods: {
     type: string;

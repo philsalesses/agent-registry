@@ -1,50 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useAuth } from '@/lib/useAuth';
+import Link from 'next/link';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
 export function MessageButton({ agentId, agentName }: { agentId: string; agentName: string }) {
+  const auth = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [credentials, setCredentials] = useState<{ agentId: string; privateKey: string } | null>(null);
-  const [showCredentials, setShowCredentials] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpen = () => {
     setIsOpen(true);
     setError(null);
     setSuccess(false);
-    
-    // Try to load credentials from localStorage
-    const saved = localStorage.getItem('ans_credentials');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setCredentials(parsed);
-      } catch {
-        // Invalid saved credentials
-      }
-    }
-  };
-
-  const handleSaveCredentials = () => {
-    const agentIdInput = (document.getElementById('sender-agent-id') as HTMLInputElement)?.value;
-    const privateKeyInput = (document.getElementById('sender-private-key') as HTMLInputElement)?.value;
-    
-    if (agentIdInput && privateKeyInput) {
-      const creds = { agentId: agentIdInput, privateKey: privateKeyInput };
-      setCredentials(creds);
-      localStorage.setItem('ans_credentials', JSON.stringify(creds));
-      setShowCredentials(false);
-    }
   };
 
   const handleSend = async () => {
-    if (!credentials) {
-      setShowCredentials(true);
+    if (!auth.isAuthenticated) {
       return;
     }
 
@@ -61,8 +39,7 @@ export function MessageButton({ agentId, agentName }: { agentId: string; agentNa
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Agent-Id': credentials.agentId,
-          'X-Agent-Private-Key': credentials.privateKey,
+          ...auth.getAuthHeaders(),
         },
         body: JSON.stringify({
           toAgentId: agentId,
@@ -85,6 +62,13 @@ export function MessageButton({ agentId, agentName }: { agentId: string; agentNa
       setError(e instanceof Error ? e.message : 'Failed to send message');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await auth.signInWithFile(file);
     }
   };
 
@@ -122,65 +106,70 @@ export function MessageButton({ agentId, agentName }: { agentId: string; agentNa
                   </div>
                   <p className="text-lg font-medium text-gray-900">Message sent!</p>
                 </div>
-              ) : showCredentials ? (
+              ) : !auth.isAuthenticated ? (
+                /* Sign In UI - same style as SignInCard */
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-600">
-                    To send messages, you need to authenticate as a registered agent.
+                  <p className="text-sm text-slate-600">
+                    Sign in to send messages to other agents.
                   </p>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Your Agent ID</label>
-                    <input
-                      id="sender-agent-id"
-                      type="text"
-                      placeholder="ag_..."
-                      defaultValue={credentials?.agentId || ''}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Your Private Key</label>
-                    <input
-                      id="sender-private-key"
-                      type="password"
-                      placeholder="Base64 private key"
-                      defaultValue={credentials?.privateKey || ''}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Your private key is stored locally and never sent to our servers.</p>
-                  </div>
+                  {auth.error && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                      {auth.error}
+                    </div>
+                  )}
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowCredentials(false)}
-                      className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveCredentials}
-                      className="flex-1 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
-                    >
-                      Save & Continue
-                    </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={auth.loading}
+                    className="w-full px-4 py-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 transition-colors disabled:opacity-50"
+                  >
+                    <div className="flex flex-col items-center">
+                      <svg className="h-8 w-8 text-slate-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <span className="font-medium">
+                        {auth.loading ? 'Signing in...' : 'Upload credentials file'}
+                      </span>
+                      <span className="text-xs text-slate-500 mt-1">*-credentials.json</span>
+                    </div>
+                  </button>
+
+                  <p className="text-xs text-slate-500 text-center">
+                    Your credentials are verified once and a session token is stored locally.
+                  </p>
+
+                  <div className="pt-4 border-t border-slate-200">
+                    <p className="text-sm text-slate-500 text-center">
+                      Don't have credentials?
+                      <Link href="/register" className="text-indigo-600 hover:text-indigo-700 font-medium ml-1">
+                        Register a new agent
+                      </Link>
+                    </p>
                   </div>
                 </div>
               ) : (
+                /* Compose Message UI */
                 <div className="space-y-4">
-                  {credentials && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">
-                        Sending as: <span className="font-mono text-gray-900">{credentials.agentId}</span>
-                      </span>
-                      <button
-                        onClick={() => setShowCredentials(true)}
-                        className="text-indigo-600 hover:underline"
-                      >
-                        Change
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">
+                      Sending as: <span className="font-medium text-gray-900">{auth.session?.agent.name}</span>
+                    </span>
+                    <button
+                      onClick={auth.signOut}
+                      className="text-red-600 hover:underline text-sm"
+                    >
+                      Sign out
+                    </button>
+                  </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
