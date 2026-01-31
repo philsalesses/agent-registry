@@ -242,6 +242,153 @@ export class ANSClient {
   }
 
   // ===========================================================================
+  // Notifications
+  // ===========================================================================
+
+  /**
+   * Get notifications for the authenticated agent
+   */
+  async getNotifications(options: { unreadOnly?: boolean; limit?: number } = {}): Promise<{
+    notifications: any[];
+    unreadCount: number;
+  }> {
+    if (!this.identity) {
+      throw new Error('Identity required');
+    }
+    const params = new URLSearchParams();
+    if (options.unreadOnly) params.set('unreadOnly', 'true');
+    if (options.limit) params.set('limit', options.limit.toString());
+    
+    const timestamp = Date.now().toString();
+    const message = `GET:/v1/notifications:${timestamp}`;
+    const signature = await this.identity.sign(message);
+    
+    return this.fetch(`/v1/notifications?${params}`, {
+      headers: {
+        'X-Agent-Signature': signature,
+        'X-Agent-Timestamp': timestamp,
+        'X-Agent-Id': this.identity.agentId,
+      },
+    });
+  }
+
+  /**
+   * Mark a notification as read
+   */
+  async markNotificationRead(notificationId: string): Promise<{ success: boolean }> {
+    if (!this.identity) {
+      throw new Error('Identity required');
+    }
+    const timestamp = Date.now().toString();
+    const message = `PATCH:/v1/notifications/${notificationId}/read:${timestamp}`;
+    const signature = await this.identity.sign(message);
+    
+    return this.fetch(`/v1/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+      headers: {
+        'X-Agent-Signature': signature,
+        'X-Agent-Timestamp': timestamp,
+        'X-Agent-Id': this.identity.agentId,
+      },
+    });
+  }
+
+  /**
+   * Mark all notifications as read
+   */
+  async markAllNotificationsRead(): Promise<{ success: boolean; count: number }> {
+    if (!this.identity) {
+      throw new Error('Identity required');
+    }
+    const timestamp = Date.now().toString();
+    const message = `PATCH:/v1/notifications/read-all:${timestamp}`;
+    const signature = await this.identity.sign(message);
+    
+    return this.fetch('/v1/notifications/read-all', {
+      method: 'PATCH',
+      headers: {
+        'X-Agent-Signature': signature,
+        'X-Agent-Timestamp': timestamp,
+        'X-Agent-Id': this.identity.agentId,
+      },
+    });
+  }
+
+  // ===========================================================================
+  // Messages
+  // ===========================================================================
+
+  /**
+   * Send a message to another agent
+   */
+  async sendMessage(toAgentId: string, content: string): Promise<any> {
+    if (!this.identity) {
+      throw new Error('Identity required');
+    }
+    const body = JSON.stringify({ toAgentId, content });
+    const timestamp = Date.now().toString();
+    const message = `POST:/v1/messages:${timestamp}:${body}`;
+    const signature = await this.identity.sign(message);
+    
+    return this.fetch('/v1/messages', {
+      method: 'POST',
+      body,
+      headers: {
+        'X-Agent-Signature': signature,
+        'X-Agent-Timestamp': timestamp,
+        'X-Agent-Id': this.identity.agentId,
+      },
+    });
+  }
+
+  /**
+   * Get inbox (received messages)
+   */
+  async getInbox(options: { limit?: number; unreadOnly?: boolean } = {}): Promise<{
+    messages: any[];
+    unreadCount: number;
+  }> {
+    if (!this.identity) {
+      throw new Error('Identity required');
+    }
+    const params = new URLSearchParams();
+    if (options.limit) params.set('limit', options.limit.toString());
+    if (options.unreadOnly) params.set('unreadOnly', 'true');
+    
+    const timestamp = Date.now().toString();
+    const message = `GET:/v1/messages:${timestamp}`;
+    const signature = await this.identity.sign(message);
+    
+    return this.fetch(`/v1/messages?${params}`, {
+      headers: {
+        'X-Agent-Signature': signature,
+        'X-Agent-Timestamp': timestamp,
+        'X-Agent-Id': this.identity.agentId,
+      },
+    });
+  }
+
+  /**
+   * Get a specific message and mark as read
+   */
+  async getMessage(messageId: string): Promise<any> {
+    if (!this.identity) {
+      throw new Error('Identity required');
+    }
+    const timestamp = Date.now().toString();
+    const message = `GET:/v1/messages/${messageId}:${timestamp}`;
+    const signature = await this.identity.sign(message);
+    
+    return this.fetch(`/v1/messages/${messageId}`, {
+      headers: {
+        'X-Agent-Signature': signature,
+        'X-Agent-Timestamp': timestamp,
+        'X-Agent-Id': this.identity.agentId,
+      },
+    });
+  }
+
+  // ===========================================================================
   // Authentication
   // ===========================================================================
 
