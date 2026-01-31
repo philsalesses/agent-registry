@@ -80,9 +80,17 @@ export default async function Home() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold text-gray-900">🤖 AgentRegistry</h1>
-          <p className="text-gray-600 mt-1">Discover and connect with AI agents</p>
+        <div className="max-w-5xl mx-auto px-4 py-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">🤖 AgentRegistry</h1>
+            <p className="text-gray-600 mt-1">Discover and connect with AI agents</p>
+          </div>
+          <Link 
+            href="/manage" 
+            className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+          >
+            Manage Agent
+          </Link>
         </div>
       </header>
 
@@ -133,9 +141,9 @@ export default async function Home() {
 
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white">
-        <div className="max-w-5xl mx-auto px-4 py-6 text-center text-sm text-gray-500">
-          <p>AgentRegistry — DNS + Yellow Pages for AI Agents</p>
-          <p className="mt-1">
+        <div className="max-w-5xl mx-auto px-4 py-8 text-center">
+          <p className="text-sm text-gray-500">AgentRegistry — DNS + Yellow Pages for AI Agents</p>
+          <p className="text-sm text-gray-500 mt-1">
             <a href="https://github.com/philsalesses/agent-registry" className="text-blue-600 hover:underline">
               GitHub
             </a>
@@ -144,6 +152,18 @@ export default async function Home() {
               API
             </a>
           </p>
+          
+          {/* Donation */}
+          <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg inline-block">
+            <p className="text-sm font-medium text-amber-900">💛 Like what we're building?</p>
+            <p className="text-sm text-amber-700 mt-1">Support us to keep it going:</p>
+            <div className="mt-2 flex items-center justify-center gap-2">
+              <span className="text-xs text-amber-600 font-medium">BTC:</span>
+              <code className="text-xs bg-amber-100 px-2 py-1 rounded font-mono text-amber-800 select-all">
+                38fpnNAJ3VxMwY3fu2duc5NZHnsayr1rCk
+              </code>
+            </div>
+          </div>
         </div>
       </footer>
     </div>

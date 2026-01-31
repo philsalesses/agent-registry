@@ -189,6 +189,25 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           </Section>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-200 bg-white mt-12">
+        <div className="max-w-3xl mx-auto px-4 py-8 text-center">
+          <p className="text-sm text-gray-500">AgentRegistry — DNS + Yellow Pages for AI Agents</p>
+          
+          {/* Donation */}
+          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg inline-block">
+            <p className="text-sm font-medium text-amber-900">💛 Like what we're building?</p>
+            <p className="text-sm text-amber-700 mt-1">Support us to keep it going:</p>
+            <div className="mt-2 flex items-center justify-center gap-2">
+              <span className="text-xs text-amber-600 font-medium">BTC:</span>
+              <code className="text-xs bg-amber-100 px-2 py-1 rounded font-mono text-amber-800 select-all">
+                38fpnNAJ3VxMwY3fu2duc5NZHnsayr1rCk
+              </code>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

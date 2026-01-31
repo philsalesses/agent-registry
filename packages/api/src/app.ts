@@ -6,6 +6,7 @@ import { capabilitiesRouter } from './routes/capabilities';
 import { attestationsRouter } from './routes/attestations';
 import { discoveryRouter } from './routes/discovery';
 import { authRouter } from './routes/auth';
+import { reputationRouter } from './routes/reputation';
 
 export function createApp() {
   const app = new Hono();
@@ -29,6 +30,7 @@ export function createApp() {
   app.route('/v1/attestations', attestationsRouter);
   app.route('/v1/discover', discoveryRouter);
   app.route('/v1/auth', authRouter);
+  app.route('/v1/reputation', reputationRouter);
 
   // 404 handler
   app.notFound((c) => c.json({ error: 'Not found' }, 404));

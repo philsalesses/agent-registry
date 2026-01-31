@@ -46,6 +46,30 @@ export async function searchAgents(query: string): Promise<{ agents: Agent[] }> 
   return res.json();
 }
 
+export async function getReputation(agentId: string): Promise<{
+  agentId: string;
+  trustScore: number;
+  breakdown: {
+    behaviorScore: number;
+    capabilityScore: number;
+    attesterBonus: number;
+    uniqueAttesters: number;
+  };
+  attestationCounts: {
+    total: number;
+    behavior: number;
+    capability: number;
+    identity: number;
+  };
+  verifiedCapabilities: string[];
+}> {
+  const res = await fetch(`${API_URL}/v1/reputation/${agentId}`, {
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) throw new Error('Failed to get reputation');
+  return res.json();
+}
+
 export async function discoverAgents(options: {
   tags?: string[];
   types?: string[];
