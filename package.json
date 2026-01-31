@@ -1,0 +1,26 @@
+{
+  "name": "agent-registry",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DNS + Yellow Pages + verification for AI agents",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "db:migrate": "pnpm --filter @agent-registry/api db:migrate",
+    "db:seed": "pnpm --filter @agent-registry/api db:seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=20"
+  }
+}
