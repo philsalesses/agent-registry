@@ -29,6 +29,13 @@
       "when": 1769842227709,
       "tag": "0003_gigantic_marrow",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1769849956558,
+      "tag": "0004_daily_manta",
+      "breakpoints": true
     }
   ]
 }

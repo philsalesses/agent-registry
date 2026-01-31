@@ -178,12 +178,12 @@ analyticsRouter.get('/leaderboard', async (c) => {
     })
   );
 
-  const agents = scored
+  const leaderboardAgents = scored
     .filter(a => a.trustScore > 0 || a.attestationCount > 0)
     .sort((a, b) => b.trustScore - a.trustScore)
     .slice(0, limit);
 
-  return c.json({ agents });
+  return c.json({ agents: leaderboardAgents });
 });
 
 /**
@@ -195,14 +195,14 @@ analyticsRouter.get('/capabilities', async (c) => {
   // Count agents per capability
   const capStats = await Promise.all(
     allCaps.map(async (cap) => {
-      const agents = await db.select({ count: count() })
+      const capAgents = await db.select({ count: count() })
         .from(agentCapabilities)
         .where(eq(agentCapabilities.capabilityId, cap.id));
       
       return {
         id: cap.id,
         description: cap.description,
-        agentCount: agents[0]?.count || 0,
+        agentCount: capAgents[0]?.count || 0,
       };
     })
   );
