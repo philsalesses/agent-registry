@@ -12,6 +12,9 @@ const discoverSchema = z.object({
   capabilities: z.array(z.string()).optional(),
   minTrustScore: z.number().min(0).max(100).optional(),
   types: z.array(z.enum(['assistant', 'autonomous', 'tool', 'service'])).optional(),
+  protocols: z.array(z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc'])).optional(),
+  tags: z.array(z.string()).optional(),
+  status: z.array(z.enum(['online', 'offline', 'maintenance', 'unknown'])).optional(),
   query: z.string().optional(),
   limit: z.number().min(1).max(100).default(20),
   offset: z.number().min(0).default(0),
@@ -35,10 +38,34 @@ discoveryRouter.post('/', zValidator('json', discoverSchema), async (c) => {
     results = results.filter(a => body.types!.includes(a.type as any));
   }
 
-  // Filter by query if specified
+  // Filter by status if specified
+  if (body.status && body.status.length > 0) {
+    results = results.filter(a => body.status!.includes(a.status as any));
+  }
+
+  // Filter by protocols if specified
+  if (body.protocols && body.protocols.length > 0) {
+    results = results.filter(a => {
+      const agentProtocols = (a.protocols as string[]) || [];
+      return body.protocols!.some(p => agentProtocols.includes(p));
+    });
+  }
+
+  // Filter by tags if specified
+  if (body.tags && body.tags.length > 0) {
+    results = results.filter(a => {
+      const agentTags = (a.tags as string[]) || [];
+      return body.tags!.some(t => agentTags.includes(t));
+    });
+  }
+
+  // Filter by query if specified (searches name + description)
   if (body.query) {
     const q = body.query.toLowerCase();
-    results = results.filter(a => a.name.toLowerCase().includes(q));
+    results = results.filter(a => 
+      a.name.toLowerCase().includes(q) || 
+      (a.description && a.description.toLowerCase().includes(q))
+    );
   }
 
   return c.json({

@@ -15,7 +15,36 @@ export const AgentIdSchema = z.object({
   type: z.enum(['assistant', 'autonomous', 'tool', 'service']),
   /** When the agent was registered */
   createdAt: z.date(),
-  /** Optional metadata */
+  
+  // === Contact & Protocols ===
+  /** Primary endpoint to reach this agent */
+  endpoint: z.string().url().optional(),
+  /** Supported protocols */
+  protocols: z.array(z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc'])).default([]),
+  
+  // === Profile ===
+  /** What this agent does */
+  description: z.string().max(500).optional(),
+  /** Avatar/profile image URL */
+  avatar: z.string().url().optional(),
+  /** Homepage or documentation URL */
+  homepage: z.string().url().optional(),
+  /** Discovery tags */
+  tags: z.array(z.string()).default([]),
+  
+  // === Accountability ===
+  /** Operator (org or person running this agent) */
+  operatorId: z.string().optional(),
+  /** Operator name (denormalized for display) */
+  operatorName: z.string().optional(),
+  
+  // === Status ===
+  /** Current availability */
+  status: z.enum(['online', 'offline', 'maintenance', 'unknown']).default('unknown'),
+  /** Last seen timestamp */
+  lastSeen: z.date().optional(),
+  
+  /** Optional metadata (extensible) */
   metadata: z.record(z.unknown()).optional(),
 });
 

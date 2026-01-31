@@ -10,9 +10,21 @@ export interface AgentKeyPair {
 /**
  * Generate a new agent identity with keypair
  */
+export interface CreateAgentOptions {
+  name: string;
+  type?: AgentId['type'];
+  description?: string;
+  endpoint?: string;
+  protocols?: ('a2a' | 'mcp' | 'http' | 'websocket' | 'grpc')[];
+  tags?: string[];
+  avatar?: string;
+  homepage?: string;
+  operatorId?: string;
+  operatorName?: string;
+}
+
 export async function createAgentIdentity(
-  name: string,
-  type: AgentId['type'] = 'assistant'
+  options: CreateAgentOptions
 ): Promise<{ agent: Omit<AgentId, 'createdAt'>; keypair: AgentKeyPair }> {
   const { privateKey, publicKey } = await generateKeypair();
   const agentId = generateId('ag_', 16);
@@ -20,9 +32,18 @@ export async function createAgentIdentity(
   return {
     agent: {
       id: agentId,
-      name,
+      name: options.name,
       publicKey: toBase64(publicKey),
-      type,
+      type: options.type || 'assistant',
+      status: 'unknown',
+      protocols: options.protocols || [],
+      tags: options.tags || [],
+      description: options.description,
+      endpoint: options.endpoint,
+      avatar: options.avatar,
+      homepage: options.homepage,
+      operatorId: options.operatorId,
+      operatorName: options.operatorName,
     },
     keypair: {
       agentId,

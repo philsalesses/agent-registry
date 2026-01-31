@@ -13,6 +13,18 @@ const registerSchema = z.object({
   name: z.string().min(1).max(64),
   publicKey: z.string(),
   type: z.enum(['assistant', 'autonomous', 'tool', 'service']),
+  // Contact
+  endpoint: z.string().url().optional(),
+  protocols: z.array(z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc'])).optional(),
+  // Profile
+  description: z.string().max(500).optional(),
+  avatar: z.string().url().optional(),
+  homepage: z.string().url().optional(),
+  tags: z.array(z.string()).optional(),
+  // Accountability
+  operatorId: z.string().optional(),
+  operatorName: z.string().optional(),
+  // Meta
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -49,6 +61,14 @@ agentsRouter.get('/:id', async (c) => {
 // Update agent
 const updateSchema = z.object({
   name: z.string().min(1).max(64).optional(),
+  endpoint: z.string().url().optional(),
+  protocols: z.array(z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc'])).optional(),
+  description: z.string().max(500).optional(),
+  avatar: z.string().url().optional(),
+  homepage: z.string().url().optional(),
+  tags: z.array(z.string()).optional(),
+  operatorName: z.string().optional(),
+  status: z.enum(['online', 'offline', 'maintenance', 'unknown']).optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -84,6 +104,51 @@ agentsRouter.get('/', async (c) => {
     limit,
     offset,
   });
+});
+
+// Heartbeat - agent reports it's alive
+agentsRouter.post('/:id/heartbeat', async (c) => {
+  const id = c.req.param('id');
+  
+  const [updated] = await db.update(agents)
+    .set({ 
+      status: 'online',
+      lastSeen: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(agents.id, id))
+    .returning();
+
+  if (!updated) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+
+  return c.json({ status: 'ok', lastSeen: updated.lastSeen });
+});
+
+// Set status explicitly
+agentsRouter.post('/:id/status', async (c) => {
+  const id = c.req.param('id');
+  const { status } = await c.req.json();
+  
+  if (!['online', 'offline', 'maintenance', 'unknown'].includes(status)) {
+    return c.json({ error: 'Invalid status' }, 400);
+  }
+
+  const [updated] = await db.update(agents)
+    .set({ 
+      status,
+      lastSeen: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(agents.id, id))
+    .returning();
+
+  if (!updated) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+
+  return c.json({ status: updated.status });
 });
 
 export { agentsRouter };

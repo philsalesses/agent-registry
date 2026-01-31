@@ -9,12 +9,34 @@ export const agents = pgTable('agents', {
   name: text('name').notNull(),
   publicKey: text('public_key').notNull(),
   type: text('type').notNull().$type<'assistant' | 'autonomous' | 'tool' | 'service'>(),
+  
+  // Contact & Protocols
+  endpoint: text('endpoint'),
+  protocols: jsonb('protocols').$type<string[]>().default([]),
+  
+  // Profile
+  description: text('description'),
+  avatar: text('avatar'),
+  homepage: text('homepage'),
+  tags: jsonb('tags').$type<string[]>().default([]),
+  
+  // Accountability
+  operatorId: text('operator_id'),
+  operatorName: text('operator_name'),
+  
+  // Status
+  status: text('status').$type<'online' | 'offline' | 'maintenance' | 'unknown'>().default('unknown'),
+  lastSeen: timestamp('last_seen'),
+  
+  // Meta
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   nameIdx: index('agents_name_idx').on(table.name),
   typeIdx: index('agents_type_idx').on(table.type),
+  statusIdx: index('agents_status_idx').on(table.status),
+  tagsIdx: index('agents_tags_idx').on(table.tags),
 }));
 
 // =============================================================================
