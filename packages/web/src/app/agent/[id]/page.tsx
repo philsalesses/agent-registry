@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getAgent, Agent } from '@/lib/api';
+import { getAgent, getReputation, Agent } from '@/lib/api';
 
 function StatusBadge({ status }: { status: Agent['status'] }) {
   const config = {
@@ -45,10 +45,18 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   
   let agent: Agent;
+  let reputation: any = null;
+  
   try {
     agent = await getAgent(id);
   } catch {
     notFound();
+  }
+
+  try {
+    reputation = await getReputation(id);
+  } catch {
+    // Reputation endpoint might fail, that's ok
   }
 
   return (
@@ -100,6 +108,45 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
         </div>
+
+        {/* Trust Score */}
+        {reputation && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Trust Score</h2>
+              <Link 
+                href={`/attest?subject=${agent.id}`}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                + Attest
+              </Link>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <div className="text-4xl font-bold text-gray-900">{reputation.trustScore}</div>
+                <div className="text-sm text-gray-500">/ 100</div>
+              </div>
+              <div className="flex-1">
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div 
+                    className="bg-gradient-to-r from-yellow-400 via-green-500 to-green-600 h-3 rounded-full transition-all"
+                    style={{ width: `${reputation.trustScore}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Behavior: {reputation.breakdown?.behaviorScore || 0}</span>
+                  <span>Capability: {reputation.breakdown?.capabilityScore || 0}</span>
+                  <span>Attesters: {reputation.breakdown?.uniqueAttesters || 0}</span>
+                </div>
+              </div>
+            </div>
+            {reputation.attestationCounts?.total > 0 && (
+              <p className="text-sm text-gray-500 mt-3">
+                Based on {reputation.attestationCounts.total} attestation{reputation.attestationCounts.total !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Tags */}

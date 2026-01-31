@@ -3,8 +3,32 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
-import { agents } from '../db/schema';
+import { agents, attestations } from '../db/schema';
 import { generateId, verifyAgentSignature } from '@agent-registry/core';
+import { validatePaymentMethods, isValidUrl, sanitizeString } from '../utils/validation';
+
+/**
+ * Compute trust score for an agent
+ */
+async function computeTrustScore(agentId: string): Promise<number> {
+  const agentAttestations = await db.query.attestations.findMany({
+    where: eq(attestations.subjectId, agentId),
+  });
+
+  if (agentAttestations.length === 0) return 0;
+
+  const behaviorScores = agentAttestations
+    .filter(a => a.claimType === 'behavior')
+    .map(a => typeof a.claimValue === 'number' ? a.claimValue : 50);
+
+  const avgBehavior = behaviorScores.length > 0
+    ? behaviorScores.reduce((a, b) => a + b, 0) / behaviorScores.length
+    : 50;
+
+  const uniqueAttesters = new Set(agentAttestations.map(a => a.attesterId)).size;
+  
+  return Math.round(avgBehavior * 0.8 + Math.min(uniqueAttesters * 4, 20));
+}
 
 /**
  * Verify a signed request from an agent
@@ -70,18 +94,43 @@ agentsRouter.post('/', zValidator('json', registerSchema), async (c) => {
   const body = c.req.valid('json');
   const id = generateId('ag_', 16);
 
+  // Validate URLs
+  if (body.endpoint && !isValidUrl(body.endpoint)) {
+    return c.json({ error: 'Invalid endpoint URL' }, 400);
+  }
+  if (body.homepage && !isValidUrl(body.homepage)) {
+    return c.json({ error: 'Invalid homepage URL' }, 400);
+  }
+
+  // Validate payment methods
+  if (body.paymentMethods) {
+    const validation = validatePaymentMethods(body.paymentMethods);
+    if (!validation.valid) {
+      return c.json({ error: validation.error }, 400);
+    }
+  }
+
   const [agent] = await db.insert(agents).values({
     id,
-    name: body.name,
+    name: sanitizeString(body.name, 64),
     publicKey: body.publicKey,
     type: body.type,
+    description: sanitizeString(body.description, 500),
+    endpoint: body.endpoint,
+    protocols: body.protocols,
+    tags: body.tags,
+    avatar: body.avatar,
+    homepage: body.homepage,
+    operatorId: body.operatorId,
+    operatorName: sanitizeString(body.operatorName, 100),
+    paymentMethods: body.paymentMethods,
     metadata: body.metadata,
   }).returning();
 
-  return c.json(agent, 201);
+  return c.json({ ...agent, trustScore: 0 }, 201);
 });
 
-// Get agent by ID
+// Get agent by ID (includes trust score)
 agentsRouter.get('/:id', async (c) => {
   const id = c.req.param('id');
   
@@ -93,7 +142,13 @@ agentsRouter.get('/:id', async (c) => {
     return c.json({ error: 'Agent not found' }, 404);
   }
 
-  return c.json(agent);
+  // Compute trust score
+  const trustScore = await computeTrustScore(id);
+  
+  // Check if verified
+  const isVerified = (agent.metadata as any)?.verified === true;
+
+  return c.json({ ...agent, trustScore, verified: isVerified });
 });
 
 // Update agent
@@ -164,11 +219,41 @@ agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
       return c.json({ error: 'Invalid private key format' }, 401);
     }
   }
-  // No auth provided - still allow for backwards compatibility (will be removed)
-  // TODO: Make authentication required
+  // No auth provided - REJECT
+  else {
+    return c.json({ 
+      error: 'Authentication required. Use SDK with private key or upload credentials in web UI.',
+      docs: 'https://github.com/philsalesses/agent-registry#authentication'
+    }, 401);
+  }
+
+  // Validate URLs
+  if (body.endpoint && !isValidUrl(body.endpoint)) {
+    return c.json({ error: 'Invalid endpoint URL' }, 400);
+  }
+  if (body.homepage && !isValidUrl(body.homepage)) {
+    return c.json({ error: 'Invalid homepage URL' }, 400);
+  }
+
+  // Validate payment methods
+  if (body.paymentMethods) {
+    const validation = validatePaymentMethods(body.paymentMethods);
+    if (!validation.valid) {
+      return c.json({ error: validation.error }, 400);
+    }
+  }
+
+  // Sanitize strings
+  const sanitizedBody = {
+    ...body,
+    name: body.name ? sanitizeString(body.name, 64) : undefined,
+    description: body.description ? sanitizeString(body.description, 500) : undefined,
+    operatorName: body.operatorName ? sanitizeString(body.operatorName, 100) : undefined,
+    updatedAt: new Date(),
+  };
 
   const [updated] = await db.update(agents)
-    .set({ ...body, updatedAt: new Date() })
+    .set(sanitizedBody)
     .where(eq(agents.id, id))
     .returning();
 
@@ -176,10 +261,11 @@ agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
     return c.json({ error: 'Agent not found' }, 404);
   }
 
-  return c.json(updated);
+  const trustScore = await computeTrustScore(id);
+  return c.json({ ...updated, trustScore });
 });
 
-// List agents
+// List agents (with trust scores)
 agentsRouter.get('/', async (c) => {
   const limit = parseInt(c.req.query('limit') || '20', 10);
   const offset = parseInt(c.req.query('offset') || '0', 10);
@@ -190,8 +276,17 @@ agentsRouter.get('/', async (c) => {
     orderBy: (agents, { desc }) => [desc(agents.createdAt)],
   });
 
+  // Add trust scores
+  const agentsWithScores = await Promise.all(
+    results.map(async (agent) => ({
+      ...agent,
+      trustScore: await computeTrustScore(agent.id),
+      verified: (agent.metadata as any)?.verified === true,
+    }))
+  );
+
   return c.json({
-    agents: results,
+    agents: agentsWithScores,
     limit,
     offset,
   });

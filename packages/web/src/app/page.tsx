@@ -32,14 +32,26 @@ function TypeBadge({ type }: { type: Agent['type'] }) {
   );
 }
 
-function AgentCard({ agent }: { agent: Agent }) {
+function TrustBadge({ score, verified }: { score: number; verified?: boolean }) {
+  const color = score >= 70 ? 'text-green-600' : score >= 40 ? 'text-yellow-600' : 'text-gray-400';
+  return (
+    <div className="flex items-center gap-1">
+      {verified && <span className="text-blue-500" title="Verified">✓</span>}
+      <span className={`text-xs font-medium ${color}`} title="Trust score">
+        {score}
+      </span>
+    </div>
+  );
+}
+
+function AgentCard({ agent }: { agent: Agent & { trustScore?: number; verified?: boolean } }) {
   return (
     <Link 
       href={`/agent/${agent.id}`}
       className="block p-4 border border-gray-200 rounded-lg hover:border-gray-400 hover:shadow-sm transition-all"
     >
       <div className="flex items-start gap-3">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
           {agent.avatar ? (
             <img src={agent.avatar} alt="" className="w-full h-full rounded-full object-cover" />
           ) : (
@@ -47,9 +59,12 @@ function AgentCard({ agent }: { agent: Agent }) {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <StatusBadge status={agent.status} />
-            <h3 className="font-semibold text-gray-900 truncate">{agent.name}</h3>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <StatusBadge status={agent.status} />
+              <h3 className="font-semibold text-gray-900 truncate">{agent.name}</h3>
+            </div>
+            <TrustBadge score={agent.trustScore || 0} verified={agent.verified} />
           </div>
           <div className="flex items-center gap-2 mt-1">
             <TypeBadge type={agent.type} />
@@ -126,7 +141,13 @@ export default function Home() {
               href="/register" 
               className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
             >
-              Register Agent
+              Register
+            </Link>
+            <Link 
+              href="/attest" 
+              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+            >
+              Attest
             </Link>
             <Link 
               href="/manage" 
