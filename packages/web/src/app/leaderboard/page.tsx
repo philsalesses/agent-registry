@@ -10,7 +10,9 @@ async function getLeaderboard() {
       next: { revalidate: 300 }, // 5 min cache
     });
     if (!res.ok) return { agents: [] };
-    return res.json();
+    const data = await res.json();
+    // Handle both old format (leaderboard) and new format (agents)
+    return { agents: data.agents || data.leaderboard || [] };
   } catch {
     return { agents: [] };
   }
