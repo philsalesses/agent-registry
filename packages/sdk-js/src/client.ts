@@ -10,9 +10,9 @@ import type {
 } from './types';
 
 /**
- * Client for interacting with AgentRegistry API
+ * Client for interacting with the Agent Name Service (ANS) API
  */
-export class AgentRegistryClient {
+export class ANSClient {
   private baseUrl: string;
   private timeout: number;
   private identity?: AgentIdentity;

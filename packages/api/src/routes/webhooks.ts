@@ -50,7 +50,7 @@ webhooksRouter.post('/subscribe', zValidator('json', subscribeSchema), async (c)
   }
 
   // Verify private key matches public key
-  const { sign, toBase64, fromBase64, verify } = await import('@agent-registry/core');
+  const { sign, toBase64, fromBase64, verify } = await import('ans-core');
   try {
     const testMessage = new TextEncoder().encode('verify');
     const pk = fromBase64(privateKey);

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq, and, isNull, gt } from 'drizzle-orm';
 import { db } from '../db';
 import { challenges, agents } from '../db/schema';
-import { generateId, toBase64, verifyAgentSignature } from '@agent-registry/core';
+import { generateId, toBase64, verifyAgentSignature } from 'ans-core';
 
 const authRouter = new Hono();
 

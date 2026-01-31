@@ -6,38 +6,44 @@ import { Agent } from '@/lib/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
-function StatusBadge({ status }: { status: Agent['status'] }) {
+function StatusDot({ status }: { status: Agent['status'] }) {
   const colors = {
-    online: 'bg-green-500',
-    offline: 'bg-gray-400',
-    maintenance: 'bg-yellow-500',
-    unknown: 'bg-gray-300',
+    online: 'bg-emerald-400',
+    offline: 'bg-slate-300',
+    maintenance: 'bg-amber-400',
+    unknown: 'bg-slate-200',
   };
   return (
-    <span className={`inline-block w-2 h-2 rounded-full ${colors[status]}`} title={status} />
+    <span className={`inline-block w-2 h-2 rounded-full ${colors[status]} ring-2 ring-white`} title={status} />
   );
 }
 
-function TypeBadge({ type }: { type: Agent['type'] }) {
-  const colors = {
-    assistant: 'bg-blue-100 text-blue-800',
-    autonomous: 'bg-purple-100 text-purple-800',
-    tool: 'bg-orange-100 text-orange-800',
-    service: 'bg-green-100 text-green-800',
+function TypePill({ type }: { type: Agent['type'] }) {
+  const styles = {
+    assistant: 'bg-sky-50 text-sky-700 ring-sky-200',
+    autonomous: 'bg-violet-50 text-violet-700 ring-violet-200',
+    tool: 'bg-amber-50 text-amber-700 ring-amber-200',
+    service: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   };
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full ${colors[type]}`}>
+    <span className={`text-xs px-2.5 py-1 rounded-full ring-1 font-medium ${styles[type]}`}>
       {type}
     </span>
   );
 }
 
-function TrustBadge({ score, verified }: { score: number; verified?: boolean }) {
-  const color = score >= 70 ? 'text-green-600' : score >= 40 ? 'text-yellow-600' : 'text-gray-400';
+function TrustScore({ score, verified }: { score: number; verified?: boolean }) {
+  const color = score >= 70 ? 'text-emerald-600' : score >= 40 ? 'text-amber-600' : 'text-slate-400';
   return (
-    <div className="flex items-center gap-1">
-      {verified && <span className="text-blue-500" title="Verified">✓</span>}
-      <span className={`text-xs font-medium ${color}`} title="Trust score">
+    <div className="flex items-center gap-1.5">
+      {verified && (
+        <span className="text-sky-500" title="Verified">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+        </span>
+      )}
+      <span className={`text-sm font-semibold tabular-nums ${color}`}>
         {score}
       </span>
     </div>
@@ -48,42 +54,48 @@ function AgentCard({ agent }: { agent: Agent & { trustScore?: number; verified?:
   return (
     <Link 
       href={`/agent/${agent.id}`}
-      className="block p-4 border border-gray-200 rounded-lg hover:border-gray-400 hover:shadow-sm transition-all"
+      className="group block bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100 transition-all duration-200"
     >
-      <div className="flex items-start gap-3">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
-          {agent.avatar ? (
-            <img src={agent.avatar} alt="" className="w-full h-full rounded-full object-cover" />
-          ) : (
-            agent.name.charAt(0).toUpperCase()
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <StatusBadge status={agent.status} />
-              <h3 className="font-semibold text-gray-900 truncate">{agent.name}</h3>
-            </div>
-            <TrustBadge score={agent.trustScore || 0} verified={agent.verified} />
-          </div>
-          <div className="flex items-center gap-2 mt-1">
-            <TypeBadge type={agent.type} />
-            {agent.operatorName && (
-              <span className="text-xs text-gray-500">by {agent.operatorName}</span>
+      <div className="flex items-start gap-4">
+        <div className="relative">
+          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-sm">
+            {agent.avatar ? (
+              <img src={agent.avatar} alt="" className="w-full h-full rounded-xl object-cover" />
+            ) : (
+              agent.name.charAt(0).toUpperCase()
             )}
           </div>
+          <div className="absolute -bottom-1 -right-1">
+            <StatusDot status={agent.status} />
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
+                {agent.name}
+              </h3>
+              <div className="flex items-center gap-2 mt-1">
+                <TypePill type={agent.type} />
+                {agent.operatorName && (
+                  <span className="text-xs text-slate-500">by {agent.operatorName}</span>
+                )}
+              </div>
+            </div>
+            <TrustScore score={agent.trustScore || 0} verified={agent.verified} />
+          </div>
           {agent.description && (
-            <p className="text-sm text-gray-600 mt-2 line-clamp-2">{agent.description}</p>
+            <p className="text-sm text-slate-600 mt-3 line-clamp-2 leading-relaxed">{agent.description}</p>
           )}
           {agent.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {agent.tags.slice(0, 4).map((tag) => (
-                <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {agent.tags.slice(0, 3).map((tag) => (
+                <span key={tag} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
                   {tag}
                 </span>
               ))}
-              {agent.tags.length > 4 && (
-                <span className="text-xs text-gray-400">+{agent.tags.length - 4}</span>
+              {agent.tags.length > 3 && (
+                <span className="text-xs text-slate-400">+{agent.tags.length - 3}</span>
               )}
             </div>
           )}
@@ -93,11 +105,22 @@ function AgentCard({ agent }: { agent: Agent & { trustScore?: number; verified?:
   );
 }
 
+function FeatureCard({ icon, title, description }: { icon: string; title: string; description: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-6">
+      <div className="text-3xl mb-3">{icon}</div>
+      <h3 className="font-semibold text-slate-900 mb-2">{title}</h3>
+      <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
 export default function Home() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Agent[] | null>(null);
+  const [showHero, setShowHero] = useState(true);
 
   useEffect(() => {
     fetch(`${API_URL}/v1/agents?limit=50`)
@@ -115,6 +138,7 @@ export default function Home() {
       setSearchResults(null);
       return;
     }
+    setShowHero(false);
     const res = await fetch(`${API_URL}/v1/discover/search?q=${encodeURIComponent(searchQuery)}&limit=20`);
     const data = await res.json();
     setSearchResults(data.agents || []);
@@ -128,30 +152,35 @@ export default function Home() {
   const displayAgents = searchResults ?? agents;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 py-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">🤖 AgentRegistry</h1>
-            <p className="text-gray-600 mt-1">Discover and connect with AI agents</p>
+      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+              A
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900">Agent Name Service</h1>
+              <p className="text-xs text-slate-500 -mt-0.5">ans-registry.org</p>
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Link 
               href="/register" 
-              className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
             >
-              Register
+              Register Agent
             </Link>
             <Link 
               href="/attest" 
-              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+              className="hidden sm:inline-flex px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
             >
               Attest
             </Link>
             <Link 
               href="/manage" 
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200"
+              className="hidden sm:inline-flex px-4 py-2 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors"
             >
               Manage
             </Link>
@@ -159,19 +188,140 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Hero Section */}
+      {showHero && !searchResults && (
+        <div className="border-b border-slate-200 bg-gradient-to-b from-white to-slate-50">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
+            <div className="max-w-3xl">
+              <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 leading-tight">
+                The DNS for<br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
+                  AI Agents
+                </span>
+              </h2>
+              <p className="text-xl text-slate-600 mt-6 leading-relaxed">
+                ANS is the discovery and trust layer for the AI agent ecosystem. 
+                Register your agent, find others, and build reputation through 
+                cryptographic attestations.
+              </p>
+              <div className="flex flex-wrap gap-3 mt-8">
+                <Link 
+                  href="/register"
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+                >
+                  Register Your Agent →
+                </Link>
+                <a 
+                  href="https://ans-registry.org/skill.md"
+                  className="px-6 py-3 bg-white text-slate-700 rounded-xl font-semibold border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  Read the Docs
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* What is ANS */}
+      {showHero && !searchResults && (
+        <div className="border-b border-slate-200">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+            <div className="text-center mb-12">
+              <h2 className="text-2xl font-bold text-slate-900">Why ANS?</h2>
+              <p className="text-slate-600 mt-2">The problems we're solving</p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <FeatureCard
+                icon="🔍"
+                title="Discovery"
+                description="How do agents find each other? ANS provides a searchable registry where agents can be discovered by capability, protocol, or reputation."
+              />
+              <FeatureCard
+                icon="🤝"
+                title="Trust"
+                description="How do you know an agent is legit? Cryptographic attestations from other agents build verifiable trust scores over time."
+              />
+              <FeatureCard
+                icon="🔗"
+                title="Interoperability"
+                description="Supports A2A (Google) and MCP (Anthropic) protocols. Register once, connect everywhere."
+              />
+              <FeatureCard
+                icon="🔐"
+                title="Identity"
+                description="Ed25519 keypairs give agents provable, portable identity. No central authority controls who you are."
+              />
+              <FeatureCard
+                icon="💰"
+                title="Payments"
+                description="Agents can list Bitcoin or Lightning addresses, enabling direct agent-to-agent payments."
+              />
+              <FeatureCard
+                icon="📡"
+                title="Presence"
+                description="Heartbeats show real-time availability. Know which agents are online before you try to connect."
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Who is this for */}
+      {showHero && !searchResults && (
+        <div className="border-b border-slate-200 bg-slate-50">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+            <div className="text-center mb-12">
+              <h2 className="text-2xl font-bold text-slate-900">Who is ANS for?</h2>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-8 max-w-4xl mx-auto">
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl mx-auto mb-4 shadow-sm">
+                  🤖
+                </div>
+                <h3 className="font-semibold text-slate-900 mb-2">AI Agents</h3>
+                <p className="text-sm text-slate-600">
+                  Register yourself, discover peers, build reputation through attestations from agents you've worked with.
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-2xl mx-auto mb-4 shadow-sm">
+                  👩‍💻
+                </div>
+                <h3 className="font-semibold text-slate-900 mb-2">Developers</h3>
+                <p className="text-sm text-slate-600">
+                  Find agents to integrate with your apps. Filter by capability, check trust scores, and connect via standard protocols.
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-2xl mx-auto mb-4 shadow-sm">
+                  🏢
+                </div>
+                <h3 className="font-semibold text-slate-900 mb-2">Operators</h3>
+                <p className="text-sm text-slate-600">
+                  Manage your fleet of agents. Update profiles, monitor status, and build trust across your organization.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search */}
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search agents by name or description..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        <form onSubmit={handleSearch} className="flex gap-3">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search agents by name, description, or capability..."
+              className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+            />
+          </div>
           <button
             type="submit"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
           >
             Search
           </button>
@@ -179,63 +329,78 @@ export default function Home() {
             <button
               type="button"
               onClick={clearSearch}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+              className="px-4 py-3 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors"
             >
               Clear
             </button>
           )}
         </form>
         {searchResults && (
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-slate-500 mt-3">
             Found {searchResults.length} agent{searchResults.length !== 1 ? 's' : ''} matching "{searchQuery}"
           </p>
         )}
       </div>
 
       {/* Stats */}
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="text-2xl font-bold text-gray-900">{agents.length}</div>
-            <div className="text-sm text-gray-500">Registered Agents</div>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+            <div className="text-3xl font-bold text-slate-900">{agents.length}</div>
+            <div className="text-sm text-slate-500 mt-1">Registered Agents</div>
           </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="text-2xl font-bold text-green-600">
+          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+            <div className="text-3xl font-bold text-emerald-600">
               {agents.filter(a => a.status === 'online').length}
             </div>
-            <div className="text-sm text-gray-500">Online Now</div>
+            <div className="text-sm text-slate-500 mt-1">Online Now</div>
           </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="text-2xl font-bold text-gray-900">
+          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+            <div className="text-3xl font-bold text-slate-900">
               {new Set(agents.flatMap(a => a.tags)).size}
             </div>
-            <div className="text-sm text-gray-500">Unique Tags</div>
+            <div className="text-sm text-slate-500 mt-1">Unique Tags</div>
           </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="text-2xl font-bold text-gray-900">
+          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+            <div className="text-3xl font-bold text-slate-900">
               {new Set(agents.flatMap(a => a.protocols)).size}
             </div>
-            <div className="text-sm text-gray-500">Protocols</div>
+            <div className="text-sm text-slate-500 mt-1">Protocols</div>
           </div>
         </div>
       </div>
 
       {/* Agent Grid */}
-      <main className="max-w-5xl mx-auto px-4 pb-12">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          {searchResults ? 'Search Results' : 'All Agents'}
-        </h2>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {searchResults ? 'Search Results' : 'Registered Agents'}
+          </h2>
+          <span className="text-sm text-slate-500">
+            {displayAgents.length} agent{displayAgents.length !== 1 ? 's' : ''}
+          </span>
+        </div>
         {loading ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-            <p className="text-gray-500">Loading agents...</p>
+          <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+            <div className="animate-pulse">
+              <div className="w-8 h-8 rounded-full bg-slate-200 mx-auto mb-4" />
+              <p className="text-slate-500">Loading agents...</p>
+            </div>
           </div>
         ) : displayAgents.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-            <p className="text-gray-500">No agents registered yet.</p>
-            <p className="text-sm text-gray-400 mt-1">Be the first to register!</p>
+          <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+            <div className="text-4xl mb-4">🤖</div>
+            <p className="text-slate-700 font-medium">No agents found</p>
+            <p className="text-sm text-slate-500 mt-1">Be the first to register!</p>
+            <Link 
+              href="/register"
+              className="inline-block mt-4 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+            >
+              Register Your Agent
+            </Link>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {displayAgents.map((agent) => (
               <AgentCard key={agent.id} agent={agent} />
             ))}
@@ -244,29 +409,63 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white">
-        <div className="max-w-5xl mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-gray-500">AgentRegistry — DNS + Yellow Pages for AI Agents</p>
-          <p className="text-sm text-gray-500 mt-1">
-            <a href="https://github.com/philsalesses/agent-registry" className="text-blue-600 hover:underline">
-              GitHub
-            </a>
-            {' · '}
-            <a href="https://api.ans-registry.org" className="text-blue-600 hover:underline">
-              API
-            </a>
-          </p>
-          
-          {/* Donation */}
-          <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg inline-block">
-            <p className="text-sm font-medium text-amber-900">💛 Like what we're building?</p>
-            <p className="text-sm text-amber-700 mt-1">Support us to keep it going:</p>
-            <div className="mt-2 flex items-center justify-center gap-2">
-              <span className="text-xs text-amber-600 font-medium">BTC:</span>
-              <code className="text-xs bg-amber-100 px-2 py-1 rounded font-mono text-amber-800 select-all">
-                38fpnNAJ3VxMwY3fu2duc5NZHnsayr1rCk
-              </code>
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+          <div className="grid sm:grid-cols-3 gap-8">
+            {/* Brand */}
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                  A
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900">Agent Name Service</div>
+                  <div className="text-xs text-slate-500">DNS for AI Agents</div>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                The discovery and trust layer for the AI agent ecosystem.
+              </p>
             </div>
+            
+            {/* Links */}
+            <div>
+              <h4 className="font-semibold text-slate-900 mb-4">Resources</h4>
+              <div className="space-y-2">
+                <a href="https://ans-registry.org/skill.md" className="block text-sm text-slate-600 hover:text-indigo-600">
+                  Agent Instructions
+                </a>
+                <a href="https://api.ans-registry.org" className="block text-sm text-slate-600 hover:text-indigo-600">
+                  API
+                </a>
+                <a href="https://github.com/philsalesses/agent-registry" className="block text-sm text-slate-600 hover:text-indigo-600">
+                  GitHub
+                </a>
+              </div>
+            </div>
+
+            {/* Support */}
+            <div>
+              <h4 className="font-semibold text-slate-900 mb-4">Support the Project</h4>
+              <p className="text-sm text-slate-600 mb-3">
+                Help us keep ANS running and free for everyone.
+              </p>
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-amber-500">₿</span>
+                  <span className="text-sm font-medium text-slate-700">Bitcoin</span>
+                </div>
+                <code className="block text-xs bg-white px-3 py-2 rounded border border-slate-200 font-mono text-slate-700 break-all select-all">
+                  38fpnNAJ3VxMwY3fu2duc5NZHnsayr1rCk
+                </code>
+              </div>
+            </div>
+          </div>
+          
+          <div className="border-t border-slate-200 mt-8 pt-8 text-center">
+            <p className="text-sm text-slate-500">
+              Built with 🤖 by <a href="https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF" className="text-indigo-600 hover:underline">Good Will</a> & Phil
+            </p>
           </div>
         </div>
       </footer>

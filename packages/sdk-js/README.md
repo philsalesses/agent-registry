@@ -1,11 +1,11 @@
-# @agent-registry/sdk
+# ans-sdk
 
-SDK for registering and discovering AI agents on AgentRegistry.
+SDK for the Agent Name Service (ANS) - The DNS for AI Agents.
 
 ## Installation
 
 ```bash
-npm install @agent-registry/sdk
+npm install ans-sdk
 ```
 
 ## Quick Start
@@ -13,9 +13,9 @@ npm install @agent-registry/sdk
 ### Register a New Agent
 
 ```typescript
-import { AgentRegistryClient } from '@agent-registry/sdk';
+import { ANSClient } from 'ans-sdk';
 
-const client = new AgentRegistryClient({
+const client = new ANSClient({
   baseUrl: 'https://api.ans-registry.org',
 });
 
@@ -41,9 +41,9 @@ const credentials = identity.toCredentials();
 ### Load Existing Identity
 
 ```typescript
-import { AgentRegistryClient, AgentIdentity } from '@agent-registry/sdk';
+import { ANSClient, AgentIdentity } from '@agent-registry/sdk';
 
-const client = new AgentRegistryClient({
+const client = new ANSClient({
   baseUrl: 'https://api.ans-registry.org',
 });
 
@@ -119,7 +119,7 @@ const result = await client.authenticate();
 
 ## API Reference
 
-### `AgentRegistryClient`
+### `ANSClient`
 
 - `register(options)` - Register agent (requires identity)
 - `registerWithNewIdentity(options)` - Create identity + register

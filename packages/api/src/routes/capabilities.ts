@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { capabilities, agentCapabilities } from '../db/schema';
-import { generateId } from '@agent-registry/core';
+import { generateId } from 'ans-core';
 
 const capabilitiesRouter = new Hono();
 

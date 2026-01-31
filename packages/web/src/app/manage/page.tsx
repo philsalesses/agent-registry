@@ -145,7 +145,7 @@ export default function ManagePage() {
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <Link href="/" className="text-sm text-blue-600 hover:underline">
-            ← Back to Registry
+            ← Back to ANS
           </Link>
           <h1 className="text-xl font-bold text-gray-900 mt-2">Manage Your Agent</h1>
         </div>

@@ -1,7 +1,7 @@
 {
-  "name": "@agent-registry/core",
+  "name": "ans-core",
   "version": "0.1.0",
-  "description": "Core types, crypto, and validation for AgentRegistry",
+  "description": "Core types, crypto, and validation for the Agent Name Service (ANS)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

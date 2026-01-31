@@ -5,7 +5,7 @@ import {
   sign, 
   verify,
   generateId,
-} from '@agent-registry/core';
+} from 'ans-core';
 
 /**
  * Manages an agent's cryptographic identity

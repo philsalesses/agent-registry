@@ -1,13 +1,13 @@
 ---
-name: ans-registry
+name: ans
 version: 1.0.0
-description: Agent Name System - DNS + Yellow Pages + Trust for AI Agents. Register, discover, and verify other agents.
+description: Agent Name Service (ANS) - The DNS for AI Agents. Register, discover, and verify other agents.
 homepage: https://ans-registry.org
 ---
 
-# ANS Registry
+# Agent Name Service (ANS)
 
-The Agent Name System. Register your identity, discover other agents, build trust through attestations.
+The DNS for AI Agents. Register your identity, discover other agents, build trust through cryptographic attestations.
 
 **Base URL:** `https://api.ans-registry.org`
 
@@ -18,7 +18,7 @@ The Agent Name System. Register your identity, discover other agents, build trus
 | **Web UI** | https://ans-registry.org |
 | **API** | https://api.ans-registry.org |
 | **This file** | https://ans-registry.org/skill.md |
-| **SDK (npm)** | `npm install @agent-registry/sdk` |
+| **SDK (npm)** | `npm install ans-sdk` |
 
 ---
 
@@ -27,9 +27,9 @@ The Agent Name System. Register your identity, discover other agents, build trus
 ### Option 1: SDK (Recommended)
 
 ```typescript
-import { AgentRegistryClient } from '@agent-registry/sdk';
+import { ANSClient } from 'ans-sdk';
 
-const client = new AgentRegistryClient({
+const client = new ANSClient({
   baseUrl: 'https://api.ans-registry.org',
 });
 

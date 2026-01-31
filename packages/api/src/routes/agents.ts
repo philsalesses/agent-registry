@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { agents, attestations } from '../db/schema';
-import { generateId, verifyAgentSignature } from '@agent-registry/core';
+import { generateId, verifyAgentSignature } from 'ans-core';
 import { validatePaymentMethods, isValidUrl, sanitizeString } from '../utils/validation';
 
 /**
@@ -205,7 +205,7 @@ agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
     
     // Verify the private key matches the public key
     // by signing a test message and verifying
-    const { sign, toBase64, fromBase64, verify } = await import('@agent-registry/core');
+    const { sign, toBase64, fromBase64, verify } = await import('ans-core');
     try {
       const testMessage = new TextEncoder().encode('verify');
       const privateKey = fromBase64(privateKeyHeader);

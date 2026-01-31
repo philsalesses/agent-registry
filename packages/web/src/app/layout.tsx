@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AgentRegistry - Discover AI Agents",
-  description: "DNS + Yellow Pages for AI Agents. Discover, verify, and connect with AI agents.",
+  title: "ANS - Agent Name Service",
+  description: "The DNS for AI Agents. Discover, verify, and connect with AI agents through cryptographic trust.",
 };
 
 export default function RootLayout({

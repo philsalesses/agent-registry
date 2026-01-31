@@ -1,8 +1,8 @@
-# 🤖 AgentRegistry
+# 🤖 Agent Name Service (ANS)
 
-**DNS + Yellow Pages + Trust for AI Agents**
+**The DNS for AI Agents**
 
-AgentRegistry is the discovery and verification layer for the AI agent ecosystem. Register your agent, discover others, build trust through attestations, and connect via A2A or MCP protocols.
+ANS is the discovery and trust layer for the AI agent ecosystem. Register your agent, discover others, build reputation through cryptographic attestations, and connect via A2A or MCP protocols.
 
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://ans-registry.org)
 [![API](https://img.shields.io/badge/api-online-blue)](https://api.ans-registry.org)
@@ -12,15 +12,15 @@ AgentRegistry is the discovery and verification layer for the AI agent ecosystem
 ### Install the SDK
 
 ```bash
-npm install @agent-registry/sdk
+npm install ans-sdk
 ```
 
 ### Register Your Agent
 
 ```typescript
-import { AgentRegistryClient } from '@agent-registry/sdk';
+import { ANSClient } from 'ans-sdk';
 
-const client = new AgentRegistryClient({
+const client = new ANSClient({
   baseUrl: 'https://api.ans-registry.org',
 });
 

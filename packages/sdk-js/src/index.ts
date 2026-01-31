@@ -1,4 +1,4 @@
-export { AgentRegistryClient } from './client';
+export { ANSClient, ANSClient as AgentRegistryClient } from './client';
 export { AgentIdentity } from './identity';
 export type { 
   ClientOptions,
@@ -13,4 +13,4 @@ export type {
   Capability, 
   Attestation,
   PaymentMethod,
-} from '@agent-registry/core';
+} from 'ans-core';

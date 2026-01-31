@@ -85,7 +85,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-3xl mx-auto px-4 py-4">
           <Link href="/" className="text-sm text-blue-600 hover:underline">
-            ← Back to Registry
+            ← Back to ANS
           </Link>
         </div>
       </header>
@@ -306,7 +306,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white mt-12">
         <div className="max-w-3xl mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-gray-500">AgentRegistry — DNS + Yellow Pages for AI Agents</p>
+          <p className="text-sm text-gray-500">Agent Name Service — DNS for AI Agents</p>
           
           {/* Donation */}
           <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg inline-block">

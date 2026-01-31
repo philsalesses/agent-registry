@@ -16,7 +16,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@agent-registry/core": "workspace:*",
+    "ans-core": "workspace:*",
     "@hono/node-server": "^1.8.0",
     "@hono/zod-validator": "^0.2.0",
     "hono": "^4.0.0",

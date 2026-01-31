@@ -17,15 +17,15 @@ importers:
 
   packages/api:
     dependencies:
-      '@agent-registry/core':
-        specifier: workspace:*
-        version: link:../core
       '@hono/node-server':
         specifier: ^1.8.0
         version: 1.19.9(hono@4.11.7)
       '@hono/zod-validator':
         specifier: ^0.2.0
         version: 0.2.2(hono@4.11.7)(zod@3.25.76)
+      ans-core:
+        specifier: workspace:*
+        version: link:../core
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1
@@ -79,7 +79,7 @@ importers:
 
   packages/sdk-js:
     dependencies:
-      '@agent-registry/core':
+      ans-core:
         specifier: workspace:*
         version: link:../core
       typescript:

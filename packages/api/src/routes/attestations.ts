@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db';
 import { attestations, agents } from '../db/schema';
-import { verifyAgentSignature, generateId } from '@agent-registry/core';
+import { verifyAgentSignature, generateId } from 'ans-core';
 
 const attestationsRouter = new Hono();
 
@@ -38,7 +38,7 @@ attestationsRouter.post('/', zValidator('json', createAttestationSchema), async 
   
   if (privateKeyHeader) {
     // Verify private key matches public key
-    const { sign, toBase64, fromBase64, verify } = await import('@agent-registry/core');
+    const { sign, toBase64, fromBase64, verify } = await import('ans-core');
     try {
       const testMessage = new TextEncoder().encode('verify');
       const privateKey = fromBase64(privateKeyHeader);
