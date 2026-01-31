@@ -22,7 +22,7 @@
 
 ### Distribution
 - [ ] **Publish SDK to npm** — Can't install @agent-registry/sdk
-- [ ] **Custom domain** — agentregistry.ai looks real, railway URL doesn't
+- [x] **Custom domain** — ans-registry.org (pending DNS setup)
 - [ ] **API documentation** — No OpenAPI/Swagger
 
 ---
@@ -56,7 +56,7 @@
 4. Verification badge (10 min)
 5. Validate inputs (15 min)
 6. Publish SDK to npm (10 min)
-7. Custom domain (need Phil to set up DNS)
+7. ~~Custom domain~~ ✓ (ans-registry.org — DNS pending)
 8. API docs (20 min)
 
 **Total: ~2 hours of work**

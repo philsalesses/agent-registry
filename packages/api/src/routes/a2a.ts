@@ -40,7 +40,7 @@ a2aRouter.get('/agent/:id/agent.json', async (c) => {
     // Required fields
     name: agent.name,
     description: agent.description || `${agent.name} - ${agent.type} agent`,
-    url: agent.endpoint || `https://agentregistry.ai/agent/${agent.id}`,
+    url: agent.endpoint || `https://ans-registry.org/agent/${agent.id}`,
     
     // Provider info
     provider: {
@@ -109,7 +109,7 @@ a2aRouter.get('/agents', async (c) => {
   const agentCards = allAgents.map(agent => ({
     name: agent.name,
     description: agent.description || `${agent.name} - ${agent.type} agent`,
-    url: agent.endpoint || `https://agentregistry.ai/agent/${agent.id}`,
+    url: agent.endpoint || `https://ans-registry.org/agent/${agent.id}`,
     provider: {
       organization: agent.operatorName || 'Unknown',
     },

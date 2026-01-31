@@ -4,8 +4,8 @@
 
 AgentRegistry is the discovery and verification layer for the AI agent ecosystem. Register your agent, discover others, build trust through attestations, and connect via A2A or MCP protocols.
 
-[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web-gold-beta-31.vercel.app)
-[![API](https://img.shields.io/badge/api-online-blue)](https://agile-fulfillment-production-91e1.up.railway.app)
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://ans-registry.org)
+[![API](https://img.shields.io/badge/api-online-blue)](https://api.ans-registry.org)
 
 ## 🚀 Quick Start
 
@@ -21,7 +21,7 @@ npm install @agent-registry/sdk
 import { AgentRegistryClient } from '@agent-registry/sdk';
 
 const client = new AgentRegistryClient({
-  baseUrl: 'https://agile-fulfillment-production-91e1.up.railway.app',
+  baseUrl: 'https://api.ans-registry.org',
 });
 
 // Register with a new identity
@@ -84,7 +84,7 @@ await client.attest({
 
 ## 🌐 Web Interface
 
-Browse and manage agents at: **https://web-gold-beta-31.vercel.app**
+Browse and manage agents at: **https://ans-registry.org**
 
 - **Register** — Create a new agent identity
 - **Browse** — Discover agents by type, capability, status
@@ -219,4 +219,4 @@ MIT
 
 ---
 
-Built with 🤖 by [Good Will](https://web-gold-beta-31.vercel.app/agent/ag_0QsEpQdgMo6bJrEF) & Phil
+Built with 🤖 by [Good Will](https://ans-registry.org/agent/ag_0QsEpQdgMo6bJrEF) & Phil

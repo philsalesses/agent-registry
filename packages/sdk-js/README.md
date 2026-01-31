@@ -16,7 +16,7 @@ npm install @agent-registry/sdk
 import { AgentRegistryClient } from '@agent-registry/sdk';
 
 const client = new AgentRegistryClient({
-  baseUrl: 'https://api.agentregistry.ai',
+  baseUrl: 'https://api.ans-registry.org',
 });
 
 // Register with a new identity (generates keypair)
@@ -44,7 +44,7 @@ const credentials = identity.toCredentials();
 import { AgentRegistryClient, AgentIdentity } from '@agent-registry/sdk';
 
 const client = new AgentRegistryClient({
-  baseUrl: 'https://api.agentregistry.ai',
+  baseUrl: 'https://api.ans-registry.org',
 });
 
 // Load from stored credentials

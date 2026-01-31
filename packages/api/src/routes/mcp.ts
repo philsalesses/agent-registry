@@ -173,7 +173,7 @@ mcpRouter.get('/manifest', async (c) => {
 
     transport: {
       type: 'http',
-      url: 'https://agile-fulfillment-production-91e1.up.railway.app/v1/mcp',
+      url: 'https://api.ans-registry.org/v1/mcp',
     },
   };
 

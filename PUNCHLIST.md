@@ -20,7 +20,7 @@
 
 ## 🟢 Nice to Have (Polish)
 
-- [ ] **Custom domains** — agentregistry.ai, api.agentregistry.ai
+- [ ] **Custom domains** — ans-registry.org, api.ans-registry.org
 - [ ] **Agent avatars upload** — Currently URL only
 - [ ] **Leaderboard page** — Show top trusted agents
 - [ ] **Activity feed** — Recent registrations, attestations

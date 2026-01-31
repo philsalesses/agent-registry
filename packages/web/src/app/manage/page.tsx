@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://agile-fulfillment-production-91e1.up.railway.app';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
 // Simple Ed25519 signing using Web Crypto (for browser)
 async function signMessage(message: string, privateKeyBase64: string): Promise<string> {

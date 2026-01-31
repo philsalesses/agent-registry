@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { Agent } from '@/lib/api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://agile-fulfillment-production-91e1.up.railway.app';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
 function StatusBadge({ status }: { status: Agent['status'] }) {
   const colors = {
@@ -252,7 +252,7 @@ export default function Home() {
               GitHub
             </a>
             {' · '}
-            <a href="https://agile-fulfillment-production-91e1.up.railway.app" className="text-blue-600 hover:underline">
+            <a href="https://api.ans-registry.org" className="text-blue-600 hover:underline">
               API
             </a>
           </p>

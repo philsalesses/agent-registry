@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://agile-fulfillment-production-91e1.up.railway.app';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
 
 export interface Agent {
   id: string;

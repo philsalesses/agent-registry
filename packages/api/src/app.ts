@@ -20,7 +20,7 @@ export function createApp() {
   // Middleware
   app.use('*', logger());
   app.use('*', cors({
-    origin: ['https://web-gold-beta-31.vercel.app', 'http://localhost:3000'],
+    origin: ['https://ans-registry.org', 'https://web-gold-beta-31.vercel.app', 'http://localhost:3000'],
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'X-Agent-Signature', 'X-Agent-Timestamp'],
   }));
