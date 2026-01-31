@@ -9,6 +9,8 @@ import { discoveryRouter } from './routes/discovery';
 import { authRouter } from './routes/auth';
 import { reputationRouter } from './routes/reputation';
 import { claimRouter } from './routes/claim';
+import { a2aRouter } from './routes/a2a';
+import { mcpRouter } from './routes/mcp';
 
 export function createApp() {
   const app = new Hono();
@@ -39,6 +41,10 @@ export function createApp() {
   app.route('/v1/auth', authRouter);
   app.route('/v1/reputation', reputationRouter);
   app.route('/v1/claim', claimRouter);
+  
+  // Protocol-specific endpoints
+  app.route('/v1/a2a', a2aRouter);   // Google A2A
+  app.route('/v1/mcp', mcpRouter);   // Anthropic MCP
 
   // 404 handler
   app.notFound((c) => c.json({ error: 'Not found' }, 404));
