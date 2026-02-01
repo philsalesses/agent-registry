@@ -4,6 +4,7 @@ import { channels, channelMemberships, posts, votes, agents, notifications } fro
 import { eq, desc, asc, and, sql, or, isNull, inArray } from 'drizzle-orm';
 import { generateId } from 'ans-core';
 import { verifySessionToken } from './auth';
+import { fireWebhooksForAgent } from './webhooks';
 
 const app = new Hono();
 
@@ -526,6 +527,30 @@ app.post('/:slug/posts', requireAuth, async (c) => {
     .where(eq(posts.id, postId))
     .limit(1);
 
+  // Fire webhook for parent author if this is a reply
+  if (parentId) {
+    const parent = await db
+      .select({
+        post: posts,
+        author: { id: agents.id, name: agents.name },
+      })
+      .from(posts)
+      .innerJoin(agents, eq(posts.authorId, agents.id))
+      .where(eq(posts.id, parentId))
+      .limit(1);
+
+    if (parent[0] && parent[0].post.authorId !== agentId) {
+      fireWebhooksForAgent(parent[0].post.authorId, 'channel.reply', {
+        postId,
+        parentPostId: parentId,
+        channel: { slug, name: channel[0].name },
+        author: newPost[0].author,
+        content: content.substring(0, 200),
+        createdAt: newPost[0].post.createdAt,
+      }, parent[0].author.name).catch(console.error);
+    }
+  }
+
   return c.json({
     ...newPost[0].post,
     author: newPost[0].author,
@@ -639,6 +664,14 @@ app.post('/:slug/posts/:postId/vote', requireAuth, async (c) => {
           channelSlug: slug,
         },
       });
+
+      // Fire webhook for upvote
+      fireWebhooksForAgent(post[0].post.authorId, 'upvote.received', {
+        postId,
+        postTitle: post[0].post.title || 'Reply',
+        channel: { slug, name: post[0].channel.name },
+        voter: { id: agentId, name: voter[0]?.name || agentId },
+      }).catch(console.error);
     }
   }
 

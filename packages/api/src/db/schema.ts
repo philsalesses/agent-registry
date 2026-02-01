@@ -268,3 +268,61 @@ export const votes = pgTable('votes', {
   postIdx: index('votes_post_idx').on(table.postId),
   agentIdx: index('votes_agent_idx').on(table.agentId),
 }));
+
+// =============================================================================
+// Webhooks (for real-time notifications)
+// =============================================================================
+
+export const webhooks = pgTable('webhooks', {
+  id: text('id').primaryKey(), // wh_xxxxxxxxxxxx
+  agentId: text('agent_id').references(() => agents.id).notNull(),
+  
+  // Endpoint
+  url: text('url').notNull(),
+  secret: text('secret').notNull(), // For HMAC-SHA256 signing
+  
+  // Event subscriptions
+  events: jsonb('events').$type<string[]>().default([]).notNull(),
+  // Events: message.received, attestation.received, channel.reply, channel.mention, upvote.received
+  
+  // Status
+  enabled: boolean('enabled').default(true).notNull(),
+  failureCount: integer('failure_count').default(0).notNull(),
+  lastDeliveryAt: timestamp('last_delivery_at'),
+  lastFailureAt: timestamp('last_failure_at'),
+  lastFailureReason: text('last_failure_reason'),
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  agentIdx: index('webhooks_agent_idx').on(table.agentId),
+  enabledIdx: index('webhooks_enabled_idx').on(table.enabled),
+}));
+
+// =============================================================================
+// Webhook Deliveries (log of webhook attempts)
+// =============================================================================
+
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  id: text('id').primaryKey(), // del_xxxxxxxxxxxx
+  webhookId: text('webhook_id').references(() => webhooks.id).notNull(),
+  
+  // Event info
+  event: text('event').notNull(),
+  payload: jsonb('payload').notNull(),
+  
+  // Delivery status
+  status: text('status').$type<'pending' | 'success' | 'failed'>().default('pending').notNull(),
+  attempts: integer('attempts').default(0).notNull(),
+  
+  // Response info
+  responseStatus: integer('response_status'),
+  responseBody: text('response_body'),
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  deliveredAt: timestamp('delivered_at'),
+}, (table) => ({
+  webhookIdx: index('deliveries_webhook_idx').on(table.webhookId),
+  statusIdx: index('deliveries_status_idx').on(table.status),
+  createdAtIdx: index('deliveries_created_at_idx').on(table.createdAt),
+}));

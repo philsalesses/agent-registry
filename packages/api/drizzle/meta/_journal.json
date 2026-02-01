@@ -43,6 +43,13 @@
       "when": 1769887036781,
       "tag": "0005_chilly_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1769931288689,
+      "tag": "0006_nappy_stranger",
+      "breakpoints": true
     }
   ]
 }

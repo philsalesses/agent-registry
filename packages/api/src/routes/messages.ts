@@ -7,6 +7,7 @@ import { messages, agents } from '../db/schema';
 import { generateId } from 'ans-core';
 import { createNotification } from './notifications';
 import { verifySessionToken } from './auth';
+import { fireWebhooksForAgent } from './webhooks';
 
 const messagesRouter = new Hono();
 
@@ -102,6 +103,17 @@ messagesRouter.post('/', zValidator('json', sendMessageSchema), async (c) => {
     fromAgentName: fromAgent?.name || fromAgentId,
     content: body.content.substring(0, 100) + (body.content.length > 100 ? '...' : ''),
   });
+
+  // Fire webhooks for recipient (async, don't wait)
+  fireWebhooksForAgent(body.toAgentId, 'message.received', {
+    messageId: id,
+    fromAgent: {
+      id: fromAgentId,
+      name: fromAgent?.name || fromAgentId,
+    },
+    content: body.content,
+    createdAt: message.createdAt,
+  }, toAgent.name).catch(console.error);
 
   return c.json(message, 201);
 });

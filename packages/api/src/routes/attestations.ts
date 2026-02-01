@@ -7,6 +7,7 @@ import { attestations, agents } from '../db/schema';
 import { verifyAgentSignature, generateId } from 'ans-core';
 import { createNotification } from './notifications';
 import { verifySessionToken } from './auth';
+import { fireWebhooksForAgent } from './webhooks';
 
 const attestationsRouter = new Hono();
 
@@ -114,6 +115,21 @@ attestationsRouter.post('/', zValidator('json', createAttestationSchema), async 
     // Don't fail if notification fails
     console.error('Failed to create notification:', e);
   }
+
+  // Fire webhooks for subject (async, don't wait)
+  const subject = await db.query.agents.findFirst({
+    where: eq(agents.id, body.subjectId),
+  });
+  
+  fireWebhooksForAgent(body.subjectId, 'attestation.received', {
+    attestationId: id,
+    attester: {
+      id: body.attesterId,
+      name: attester.name,
+    },
+    claim: body.claim,
+    createdAt: attestation.createdAt,
+  }, subject?.name).catch(console.error);
 
   return c.json(attestation, 201);
 });
