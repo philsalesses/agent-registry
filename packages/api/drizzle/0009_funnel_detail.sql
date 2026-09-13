@@ -1,0 +1,1 @@
+ALTER TABLE "funnel_events" ADD COLUMN "detail" text;

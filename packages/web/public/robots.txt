@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /manage
+Disallow: /wallet
+Disallow: /messages
+Disallow: /notifications
+
+Sitemap: https://ans-registry.org/sitemap.xml

@@ -1,608 +1,632 @@
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, ne, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
+import {
+  ANS_BLOCK,
+  ANS_LINKS,
+  HANDLE_REGEX,
+  RESERVED_HANDLES,
+  SANDBOX_GRANT_MICROS,
+  AgentPolicySchema,
+  fromBase64,
+  generateApiKey,
+  generateId,
+  sha256hex,
+  verifyRegistration,
+  type AgentPolicy,
+  type ReceiptCounts,
+} from 'ans-core';
 import { db } from '../db';
-import { agents, attestations } from '../db/schema';
-import { generateId, verifyAgentSignature } from 'ans-core';
-import { validatePaymentMethods, isValidUrl, sanitizeString } from '../utils/validation';
-import { verifySessionToken } from './auth';
+import { ipHash } from '../lib/funnel';
+import { activeOffersOf, toWireOfferSummary } from '../lib/offers';
+import { agents, apiKeys, attestations, funnelEvents, offers, receipts, systemFlags, API_KEY_SCOPES, DEFAULT_AGENT_POLICY, type ApiKeyScope, type OfferStats } from '../db/schema';
+import { config } from '../config';
+import { requireAgent, requireOwner, resolveAgent, type AgentRow } from '../lib/auth';
+import { jsonAns, teach } from '../lib/errors';
+import { clientIp, registerIpLimit } from '../lib/ratelimit';
+import { grantSandbox } from '../lib/ledger';
+import { validatePaymentMethods, sanitizeString } from '../utils/validation';
 
 /**
- * Compute trust score for an agent
+ * Identity routes (docs/DESIGN.md section 4 "Identity and auth", 14.6, 14.7,
+ * 14.14). One auth scheme: signed, session or api key via lib/auth. There is
+ * no private-key header and no placeholder-key bypass anywhere in this file.
  */
-async function computeTrustScore(agentId: string): Promise<number> {
-  const agentAttestations = await db.query.attestations.findMany({
-    where: eq(attestations.subjectId, agentId),
-  });
-
-  if (agentAttestations.length === 0) return 0;
-
-  const behaviorScores = agentAttestations
-    .filter(a => a.claimType === 'behavior')
-    .map(a => typeof a.claimValue === 'number' ? a.claimValue : 50);
-
-  const avgBehavior = behaviorScores.length > 0
-    ? behaviorScores.reduce((a, b) => a + b, 0) / behaviorScores.length
-    : 50;
-
-  const uniqueAttesters = new Set(agentAttestations.map(a => a.attesterId)).size;
-  
-  return Math.round(avgBehavior * 0.8 + Math.min(uniqueAttesters * 4, 20));
-}
-
-/**
- * Verify a signed request from an agent
- * Header: X-Agent-Signature: base64-signature
- * Header: X-Agent-Timestamp: unix-ms
- * Signs: `${method}:${path}:${timestamp}:${bodyHash}`
- */
-async function verifyAgentRequest(
-  agentId: string,
-  method: string,
-  path: string,
-  timestamp: string,
-  signature: string,
-  body: string
-): Promise<boolean> {
-  // Check timestamp is within 5 minutes
-  const ts = parseInt(timestamp, 10);
-  const now = Date.now();
-  if (Math.abs(now - ts) > 5 * 60 * 1000) {
-    return false;
-  }
-
-  // Get agent's public key
-  const agent = await db.query.agents.findFirst({
-    where: eq(agents.id, agentId),
-  });
-  if (!agent) return false;
-
-  // Verify signature
-  const message = `${method}:${path}:${timestamp}:${body}`;
-  return verifyAgentSignature(message, signature, agent.publicKey);
-}
 
 const agentsRouter = new Hono();
 
-// Register a new agent
+// ---------------------------------------------------------------------------
+// Public views shared with discovery, reputation, analytics and a2a
+// ---------------------------------------------------------------------------
+
+export interface TrustView {
+  score: number;
+  confidence: number;
+  rank: number;
+  computedAt: string | null;
+}
+
+export function trustOf(a: Pick<AgentRow, 'trustScore' | 'trustConfidence' | 'trustRank' | 'trustComputedAt'>): TrustView {
+  return {
+    score: a.trustScore,
+    confidence: a.trustConfidence,
+    rank: a.trustRank,
+    computedAt: a.trustComputedAt ? a.trustComputedAt.toISOString() : null,
+  };
+}
+
+export function receiptCountsOf(a: Pick<AgentRow, 'receiptCounts'>): ReceiptCounts {
+  return { confirmed: 0, unconfirmed: 0, unreviewed: 0, negative: 0, noReview: 0, ...(a.receiptCounts ?? {}) };
+}
+
+export function policyOf(a: Pick<AgentRow, 'policy'>): AgentPolicy {
+  const p = { ...DEFAULT_AGENT_POLICY, ...(a.policy ?? {}) };
+  return { requireRegistered: !!p.requireRegistered, minTrust: Number(p.minTrust) || 0, acceptSandbox: p.acceptSandbox !== false };
+}
+
+/** The agent as every public surface shows it. Never includes private data (there is none on the row). */
+export function publicAgentView(a: AgentRow) {
+  return {
+    id: a.id,
+    handle: a.handle,
+    name: a.name,
+    type: a.type,
+    description: a.description,
+    avatar: a.avatar,
+    homepage: a.homepage,
+    endpoint: a.endpoint,
+    protocols: a.protocols ?? [],
+    tags: a.tags ?? [],
+    linkedProfiles: a.linkedProfiles ?? {},
+    verificationTier: a.verificationTier ?? 0,
+    operatorId: a.operatorId,
+    operatorName: a.operatorName,
+    paymentMethods: a.paymentMethods ?? [],
+    status: a.status,
+    lastSeen: a.lastSeen,
+    publicKey: a.publicKey,
+    metadata: a.metadata ?? null,
+    isHouse: a.isHouse,
+    referredBy: a.referredBy,
+    trust: trustOf(a),
+    receiptCounts: receiptCountsOf(a),
+    policy: policyOf(a),
+    createdAt: a.createdAt,
+    updatedAt: a.updatedAt,
+  };
+}
+
+export type PublicAgentView = ReturnType<typeof publicAgentView>;
+
+/** `@handle/slug@version`, the full offer name */
+export function offerName(handle: string | null, slug: string, version: number): string {
+  return `@${handle ?? 'unknown'}/${slug}@${version}`;
+}
+
+export function profileUrl(a: Pick<AgentRow, 'id'>): string {
+  return `${config.publicWebUrl}/agent/${a.id}`;
+}
+
+/**
+ * A jsonb column as a real jsonb value in SQL. drizzle 0.29 stringifies jsonb
+ * params and postgres.js 3.4 serializes them again, so rows written through
+ * drizzle hold a JSON-encoded string scalar ("[\"a\"]") rather than an array;
+ * drizzle reads both back correctly, but SQL operators (?|, ->>, jsonb_array_elements)
+ * need the unwrapped form. Rows written by SQL (migrations) are already plain.
+ */
+export function jsonbValue(column: SQLWrapper): SQL {
+  return sql`(case when jsonb_typeof(${column}) = 'string' and left(${column} #>> '{}', 1) in ('[', '{') then (${column} #>> '{}')::jsonb else ${column} end)`;
+}
+
+/** The jsonb column as an array (empty when null or not an array). */
+export function jsonbArray(column: SQLWrapper): SQL {
+  const v = jsonbValue(column);
+  return sql`(case when jsonb_typeof(${v}) = 'array' then ${v} else '[]'::jsonb end)`;
+}
+
+/** `(receipt_counts ->> 'confirmed')::int` regardless of encoding, for ordering. */
+export const confirmedReceiptsSql = sql`coalesce((${jsonbValue(agents.receiptCounts)} ->> 'confirmed')::int, 0)`;
+
+// ---------------------------------------------------------------------------
+// Shared schemas
+// ---------------------------------------------------------------------------
+
+const agentTypeSchema = z.enum(['assistant', 'autonomous', 'tool', 'service']);
+const protocolSchema = z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc']);
+const statusSchema = z.enum(['online', 'offline', 'maintenance', 'unknown']);
+const paymentMethodSchema = z.object({
+  type: z.enum(['bitcoin', 'lightning', 'ethereum', 'usdc', 'other']),
+  address: z.string().min(1).max(200),
+  label: z.string().max(64).optional(),
+});
+const tagsSchema = z.array(z.string().min(1).max(48)).max(32);
+const linkedProfilesSchema = z.object({
+  moltbook: z.string().max(100).optional(),
+  github: z.string().max(100).optional(),
+  twitter: z.string().max(100).optional(),
+  discord: z.string().max(100).optional(),
+  website: z.string().url().optional(),
+});
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function isEd25519PublicKey(b64: string): boolean {
+  try {
+    return fromBase64(b64).length === 32;
+  } catch {
+    return false;
+  }
+}
+
+const RESERVED = new Set<string>([...RESERVED_HANDLES, 'ans']);
+
+async function registrationsPaused(): Promise<boolean> {
+  const [row] = await db.select({ value: systemFlags.value }).from(systemFlags).where(eq(systemFlags.key, 'registrations_paused'));
+  return row?.value === true || row?.value === 'true';
+}
+
+// ---------------------------------------------------------------------------
+// POST /v1/agents: registration v2 (proof of possession, handle, sandbox grant, api key)
+// ---------------------------------------------------------------------------
+
 const registerSchema = z.object({
   name: z.string().min(1).max(64),
-  publicKey: z.string(),
-  type: z.enum(['assistant', 'autonomous', 'tool', 'service']),
-  // Contact
-  endpoint: z.string().url().optional(),
-  protocols: z.array(z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc'])).optional(),
-  // Profile
+  handle: z.string().min(3).max(33),
+  publicKey: z.string().min(40).max(64),
+  type: agentTypeSchema,
   description: z.string().max(500).optional(),
-  avatar: z.string().url().optional(),
-  homepage: z.string().url().optional(),
-  tags: z.array(z.string()).optional(),
-  // Accountability
-  operatorId: z.string().optional(),
-  operatorName: z.string().optional(),
-  // Payment (operator-controlled)
-  paymentMethods: z.array(z.object({
-    type: z.enum(['bitcoin', 'lightning', 'ethereum', 'usdc', 'other']),
-    address: z.string(),
-    label: z.string().optional(),
-  })).optional(),
-  // Meta
+  referredBy: z.string().max(64).optional(),
+  tags: tagsSchema.optional(),
+  endpoint: z.string().url().max(2048).optional(),
+  protocols: z.array(protocolSchema).optional(),
+  homepage: z.string().url().max(2048).optional(),
+  avatar: z.string().url().max(2048).optional(),
+  operatorId: z.string().max(100).optional(),
+  operatorName: z.string().max(100).optional(),
+  paymentMethods: z.array(paymentMethodSchema).max(10).optional(),
   metadata: z.record(z.unknown()).optional(),
+  /** funnel attribution: rc_x | of_x | npx | web | api (14.14) */
+  src: z.string().max(64).optional(),
+  /** base64 Ed25519 over buildRegistrationMessage(body without signature) */
+  signature: z.string().min(1),
 });
 
-agentsRouter.post('/', zValidator('json', registerSchema), async (c) => {
-  const body = c.req.valid('json');
-  const id = generateId('ag_', 16);
+/** Metadata keys only the registry writes */
+const RESERVED_METADATA = /^(capExceeded|negativeBalance.*|registeredFrom)$/;
 
-  // Validate URLs
-  if (body.endpoint && !isValidUrl(body.endpoint)) {
-    return c.json({ error: 'Invalid endpoint URL' }, 400);
-  }
-  if (body.homepage && !isValidUrl(body.homepage)) {
-    return c.json({ error: 'Invalid homepage URL' }, 400);
+export const REGISTRATION_KEY_SCOPES: ApiKeyScope[] = ['read', 'receipts', 'invoke', 'publish'];
+
+agentsRouter.post('/', registerIpLimit(), async (c) => {
+  if (await registrationsPaused()) {
+    return teach(c, 503, 'internal', 'Registrations are paused. Try again later.', { fix: { docs: ANS_BLOCK.docs, url: config.publicWebUrl } });
   }
 
-  // Validate payment methods
-  if (body.paymentMethods) {
-    const validation = validatePaymentMethods(body.paymentMethods);
-    if (!validation.valid) {
-      return c.json({ error: validation.error }, 400);
-    }
+  const raw: unknown = await c.req.json();
+  if (!isPlainObject(raw)) return teach(c, 400, 'bad_request', 'Request body must be a JSON object');
+
+  // Proof of possession first: the signature covers the body exactly as sent.
+  if (typeof raw.publicKey !== 'string' || !isEd25519PublicKey(raw.publicKey)) {
+    return teach(c, 400, 'validation_error', 'publicKey must be a base64 Ed25519 public key (32 bytes)', { fix: { docs: ANS_BLOCK.docs } });
   }
-
-  const [agent] = await db.insert(agents).values({
-    id,
-    name: sanitizeString(body.name, 64),
-    publicKey: body.publicKey,
-    type: body.type,
-    description: sanitizeString(body.description, 500),
-    endpoint: body.endpoint,
-    protocols: body.protocols,
-    tags: body.tags,
-    avatar: body.avatar,
-    homepage: body.homepage,
-    operatorId: body.operatorId,
-    operatorName: sanitizeString(body.operatorName, 100),
-    paymentMethods: body.paymentMethods,
-    metadata: body.metadata,
-  }).returning();
-
-  return c.json({ ...agent, trustScore: 0 }, 201);
-});
-
-// Get agent by ID (includes trust score and capabilities)
-agentsRouter.get('/:id', async (c) => {
-  const id = c.req.param('id');
-  
-  const agent = await db.query.agents.findFirst({
-    where: eq(agents.id, id),
-  });
-
-  if (!agent) {
-    return c.json({ error: 'Agent not found' }, 404);
-  }
-
-  // Compute trust score
-  const trustScore = await computeTrustScore(id);
-  
-  // Check if verified
-  const isVerified = (agent.metadata as any)?.verified === true;
-
-  // Get capabilities
-  const capabilities = await db.query.agentCapabilities.findMany({
-    where: eq(agentCapabilities.agentId, id),
-  });
-
-  return c.json({ 
-    ...agent, 
-    trustScore, 
-    verified: isVerified,
-    capabilities: capabilities.map(c => ({
-      id: c.capabilityId,
-      trustScore: c.trustScore,
-      verified: c.verified,
-    })),
-  });
-});
-
-// Update agent
-const updateSchema = z.object({
-  name: z.string().min(1).max(64).optional(),
-  endpoint: z.string().url().optional(),
-  protocols: z.array(z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc'])).optional(),
-  description: z.string().max(500).optional(),
-  avatar: z.string().url().optional(),
-  homepage: z.string().url().optional(),
-  tags: z.array(z.string()).optional(),
-  operatorName: z.string().optional(),
-  linkedProfiles: z.object({
-    moltbook: z.string().optional(),
-    github: z.string().optional(),
-    twitter: z.string().optional(),
-    discord: z.string().optional(),
-    website: z.string().optional(),
-  }).optional(),
-  paymentMethods: z.array(z.object({
-    type: z.enum(['bitcoin', 'lightning', 'ethereum', 'usdc', 'other']),
-    address: z.string(),
-    label: z.string().optional(),
-  })).optional(),
-  status: z.enum(['online', 'offline', 'maintenance', 'unknown']).optional(),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-agentsRouter.patch('/:id', zValidator('json', updateSchema), async (c) => {
-  const id = c.req.param('id');
-  const body = c.req.valid('json');
-
-  // Check for authentication
-  const signature = c.req.header('X-Agent-Signature');
-  const timestamp = c.req.header('X-Agent-Timestamp');
-  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
-  const authHeader = c.req.header('Authorization');
-  
-  // Method 1: Session token (Bearer)
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const result = await verifySessionToken(token);
-    if (!result.valid || result.agentId !== id) {
-      return c.json({ error: 'Invalid or expired session token' }, 401);
-    }
-  }
-  // Method 2: Signed request (SDK)
-  else if (signature && timestamp) {
-    const rawBody = JSON.stringify(body);
-    const isValid = await verifyAgentRequest(
-      id,
-      'PATCH',
-      `/v1/agents/${id}`,
-      timestamp,
-      signature,
-      rawBody
-    );
-    if (!isValid) {
-      return c.json({ error: 'Invalid signature' }, 401);
-    }
-  }
-  // Method 3: Private key verification (Web UI - legacy fallback)
-  else if (privateKeyHeader && timestamp) {
-    const agent = await db.query.agents.findFirst({
-      where: eq(agents.id, id),
+  if (typeof raw.signature !== 'string' || !(await verifyRegistration(raw))) {
+    return teach(c, 401, 'invalid_signature', 'The registration signature does not verify against publicKey', {
+      details: { signed: "'register:' + sha256hex(canonicalize(body without signature))", publicKey: raw.publicKey },
+      fix: { docs: ANS_BLOCK.docs, next: 'Sign with ans-core signRegistration(privateKey, body) and place the result in body.signature (ans-sdk and ans-mcp do this for you)' },
     });
-    if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404);
-    }
-    
-    // Verify the private key matches the public key
-    // by signing a test message and verifying
-    const { sign, toBase64, fromBase64, verify } = await import('ans-core');
-    try {
-      const testMessage = new TextEncoder().encode('verify');
-      const privateKey = fromBase64(privateKeyHeader);
-      const sig = await sign(testMessage, privateKey);
-      const publicKey = fromBase64(agent.publicKey);
-      const isValid = await verify(sig, testMessage, publicKey);
-      if (!isValid) {
-        return c.json({ error: 'Invalid private key' }, 401);
-      }
-    } catch {
-      return c.json({ error: 'Invalid private key format' }, 401);
-    }
-  }
-  // No auth provided - REJECT
-  else {
-    return c.json({ 
-      error: 'Authentication required. Use session token, SDK signature, or upload credentials.',
-      docs: 'https://github.com/philsalesses/agent-registry#authentication'
-    }, 401);
   }
 
-  // Validate URLs
-  if (body.endpoint && !isValidUrl(body.endpoint)) {
-    return c.json({ error: 'Invalid endpoint URL' }, 400);
+  const body = registerSchema.parse(raw);
+  const handle = body.handle.trim().replace(/^@/, '').toLowerCase();
+  if (!HANDLE_REGEX.test(handle)) {
+    return teach(c, 400, 'validation_error', 'handle must be 3 to 32 lowercase letters, digits or hyphens', { details: { handle: body.handle } });
   }
-  if (body.homepage && !isValidUrl(body.homepage)) {
-    return c.json({ error: 'Invalid homepage URL' }, 400);
+  if (RESERVED.has(handle)) {
+    return teach(c, 400, 'validation_error', `Handle @${handle} is reserved`, { details: { handle, reserved: true } });
+  }
+  const houseTaken = await db.select({ id: agents.id }).from(agents).where(and(eq(agents.handle, handle), eq(agents.isHouse, true))).limit(1);
+  if (houseTaken.length > 0) {
+    return teach(c, 400, 'validation_error', `Handle @${handle} is reserved for a house agent`, { details: { handle, reserved: true } });
+  }
+  const taken = await db.select({ id: agents.id }).from(agents).where(eq(agents.handle, handle)).limit(1);
+  if (taken.length > 0) {
+    return teach(c, 409, 'conflict', `Handle @${handle} is already registered`, { details: { handle }, fix: { docs: ANS_BLOCK.docs, next: 'Pick another handle and sign the body again' } });
   }
 
-  // Validate payment methods
+  let referredBy: string | null = null;
+  if (body.referredBy) {
+    const referrer = await resolveAgent(body.referredBy);
+    if (!referrer) return teach(c, 400, 'validation_error', `referredBy agent ${body.referredBy} does not exist`, { details: { referredBy: body.referredBy } });
+    referredBy = referrer.id;
+  }
   if (body.paymentMethods) {
-    const validation = validatePaymentMethods(body.paymentMethods);
-    if (!validation.valid) {
-      return c.json({ error: validation.error }, 400);
-    }
+    const v = validatePaymentMethods(body.paymentMethods);
+    if (!v.valid) return teach(c, 400, 'validation_error', v.error ?? 'Invalid payment methods');
   }
 
-  // Sanitize strings
-  const sanitizedBody = {
-    ...body,
-    name: body.name ? sanitizeString(body.name, 64) : undefined,
-    description: body.description ? sanitizeString(body.description, 500) : undefined,
-    operatorName: body.operatorName ? sanitizeString(body.operatorName, 100) : undefined,
-    updatedAt: new Date(),
-  };
+  const id = generateId('ag_', 16);
+  const now = new Date();
+  const src = body.src ? sanitizeString(body.src, 64) ?? null : (c.req.query('src') ? sanitizeString(c.req.query('src'), 64) ?? null : null);
+  const metadata: Record<string, unknown> = Object.fromEntries(Object.entries(body.metadata ?? {}).filter(([k]) => !RESERVED_METADATA.test(k)));
+  if (src) metadata.registeredFrom = src;
+  const minted = generateApiKey();
 
-  const [updated] = await db.update(agents)
-    .set(sanitizedBody)
-    .where(eq(agents.id, id))
-    .returning();
-
-  if (!updated) {
-    return c.json({ error: 'Agent not found' }, 404);
-  }
-
-  const trustScore = await computeTrustScore(id);
-  return c.json({ ...updated, trustScore });
-});
-
-// List agents (with trust scores)
-agentsRouter.get('/', async (c) => {
-  const limit = parseInt(c.req.query('limit') || '20', 10);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
-
-  const results = await db.query.agents.findMany({
-    limit,
-    offset,
-    orderBy: (agents, { desc }) => [desc(agents.createdAt)],
-  });
-
-  // Add trust scores
-  const agentsWithScores = await Promise.all(
-    results.map(async (agent) => ({
-      ...agent,
-      trustScore: await computeTrustScore(agent.id),
-      verified: (agent.metadata as any)?.verified === true,
-    }))
-  );
-
-  return c.json({
-    agents: agentsWithScores,
-    limit,
-    offset,
-  });
-});
-
-// Heartbeat - agent reports it's alive
-agentsRouter.post('/:id/heartbeat', async (c) => {
-  const id = c.req.param('id');
-  
-  const [updated] = await db.update(agents)
-    .set({ 
-      status: 'online',
-      lastSeen: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(agents.id, id))
-    .returning();
-
-  if (!updated) {
-    return c.json({ error: 'Agent not found' }, 404);
-  }
-
-  return c.json({ status: 'ok', lastSeen: updated.lastSeen });
-});
-
-// Set status explicitly
-agentsRouter.post('/:id/status', async (c) => {
-  const id = c.req.param('id');
-  const { status } = await c.req.json();
-  
-  if (!['online', 'offline', 'maintenance', 'unknown'].includes(status)) {
-    return c.json({ error: 'Invalid status' }, 400);
-  }
-
-  const [updated] = await db.update(agents)
-    .set({ 
-      status,
-      lastSeen: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(agents.id, id))
-    .returning();
-
-  if (!updated) {
-    return c.json({ error: 'Agent not found' }, 404);
-  }
-
-  return c.json({ status: updated.status });
-});
-
-// Transfer ownership - change the public key (current owner must authenticate)
-const transferSchema = z.object({
-  newPublicKey: z.string().min(20).max(100),
-});
-
-agentsRouter.post('/:id/transfer', zValidator('json', transferSchema), async (c) => {
-  const id = c.req.param('id');
-  const { newPublicKey } = c.req.valid('json');
-
-  // Check for authentication from current owner
-  const signature = c.req.header('X-Agent-Signature');
-  const timestamp = c.req.header('X-Agent-Timestamp');
-  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
-
-  const agent = await db.query.agents.findFirst({
-    where: eq(agents.id, id),
-  });
-  
-  if (!agent) {
-    return c.json({ error: 'Agent not found' }, 404);
-  }
-
-  // Method 1: Signed request (SDK)
-  if (signature && timestamp) {
-    const rawBody = JSON.stringify({ newPublicKey });
-    const isValid = await verifyAgentRequest(
+  const agent = await db.transaction(async (tx) => {
+    const [row] = await tx.insert(agents).values({
       id,
-      'POST',
-      `/v1/agents/${id}/transfer`,
-      timestamp,
-      signature,
-      rawBody
-    );
-    if (!isValid) {
-      return c.json({ error: 'Invalid signature - must be signed by current owner' }, 401);
-    }
-  }
-  // Method 2: Private key verification (Web UI)
-  else if (privateKeyHeader && timestamp) {
-    // Skip verification if public key is a placeholder
-    if (agent.publicKey === 'test-key-placeholder' || agent.publicKey.length < 20) {
-      // Allow transfer without verification for placeholder keys
-      console.log(`Allowing transfer of ${id} with placeholder key`);
-    } else {
-      const { sign, toBase64, fromBase64, verify } = await import('ans-core');
-      try {
-        const testMessage = new TextEncoder().encode('verify');
-        const privateKey = fromBase64(privateKeyHeader);
-        const sig = await sign(testMessage, privateKey);
-        const publicKey = fromBase64(agent.publicKey);
-        const isValid = await verify(sig, testMessage, publicKey);
-        if (!isValid) {
-          return c.json({ error: 'Invalid private key - must be current owner' }, 401);
-        }
-      } catch {
-        return c.json({ error: 'Invalid private key format' }, 401);
-      }
-    }
-  }
-  // No auth - reject (unless placeholder key)
-  else if (agent.publicKey !== 'test-key-placeholder' && agent.publicKey.length >= 20) {
-    return c.json({ 
-      error: 'Authentication required. Current owner must authorize the transfer.',
-    }, 401);
-  }
+      name: sanitizeString(body.name, 64) ?? body.name,
+      handle,
+      publicKey: body.publicKey,
+      type: body.type,
+      description: sanitizeString(body.description, 500),
+      endpoint: body.endpoint,
+      protocols: body.protocols ?? [],
+      tags: body.tags ?? [],
+      avatar: body.avatar,
+      homepage: body.homepage,
+      operatorId: body.operatorId,
+      operatorName: sanitizeString(body.operatorName, 100),
+      paymentMethods: body.paymentMethods ?? [],
+      metadata,
+      referredBy,
+      status: 'unknown',
+      policy: DEFAULT_AGENT_POLICY,
+      receiptCounts: { confirmed: 0, unconfirmed: 0, unreviewed: 0, negative: 0, noReview: 0 },
+      createdAt: now,
+      updatedAt: now,
+    }).returning();
 
-  // Update the public key
-  const [updated] = await db.update(agents)
-    .set({ 
-      publicKey: newPublicKey,
-      updatedAt: new Date(),
-    })
-    .where(eq(agents.id, id))
-    .returning();
+    await grantSandbox(id, tx);
 
-  const trustScore = await computeTrustScore(id);
-  return c.json({ 
-    ...updated, 
-    trustScore,
-    message: 'Ownership transferred successfully. Save your new credentials!'
-  });
-});
+    await tx.insert(apiKeys).values({
+      id: minted.prefix,
+      keyHash: minted.hash,
+      agentId: id,
+      label: 'default',
+      scopes: REGISTRATION_KEY_SCOPES,
+      spendCapMicrosPerDay: 0n,
+      createdAt: now,
+    });
 
-// =============================================================================
-// Agent Capabilities
-// =============================================================================
+    await tx.insert(funnelEvents).values({
+      id: generateId('fe_', 16),
+      event: 'register.completed',
+      agentId: id,
+      src,
+      receiptId: src && src.startsWith('rc_') ? src : null,
+      offerId: src && src.startsWith('of_') ? src : null,
+      ipHash: ipHash(clientIp(c), now),
+      createdAt: now,
+    });
 
-import { agentCapabilities } from '../db/schema';
-import { and } from 'drizzle-orm';
-
-// Get agent's capabilities
-agentsRouter.get('/:id/capabilities', async (c) => {
-  const id = c.req.param('id');
-
-  const results = await db.query.agentCapabilities.findMany({
-    where: eq(agentCapabilities.agentId, id),
+    return row;
   });
 
-  return c.json({ 
-    agentId: id,
-    capabilities: results.map(r => ({
-      id: r.capabilityId,
-      endpoint: r.endpoint,
-      trustScore: r.trustScore,
-      verified: r.verified,
-      addedAt: r.createdAt,
-    })),
-  });
-});
-
-// Add a capability to agent
-const addCapabilitySchema = z.object({
-  capabilityId: z.string().min(1).max(64),
-  endpoint: z.string().url().optional(),
-});
-
-agentsRouter.post('/:id/capabilities', zValidator('json', addCapabilitySchema), async (c) => {
-  const id = c.req.param('id');
-  const body = c.req.valid('json');
-
-  // Check auth
-  const authHeader = c.req.header('Authorization');
-  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
-  const timestamp = c.req.header('X-Agent-Timestamp');
-  
-  // Bearer token
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const result = await verifySessionToken(token);
-    if (!result.valid || result.agentId !== id) {
-      return c.json({ error: 'Invalid or expired session token' }, 401);
-    }
-  }
-  // Private key
-  else if (privateKeyHeader && timestamp) {
-    const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
-    if (!agent) return c.json({ error: 'Agent not found' }, 404);
-    
-    const { sign, fromBase64, verify } = await import('ans-core');
-    try {
-      const testMessage = new TextEncoder().encode('verify');
-      const privateKey = fromBase64(privateKeyHeader);
-      const sig = await sign(testMessage, privateKey);
-      const publicKey = fromBase64(agent.publicKey);
-      const isValid = await verify(sig, testMessage, publicKey);
-      if (!isValid) return c.json({ error: 'Invalid private key' }, 401);
-    } catch {
-      return c.json({ error: 'Invalid private key format' }, 401);
-    }
-  }
-  else {
-    return c.json({ error: 'Authentication required' }, 401);
-  }
-
-  // Check if already has this capability
-  const existing = await db.query.agentCapabilities.findFirst({
-    where: and(
-      eq(agentCapabilities.agentId, id),
-      eq(agentCapabilities.capabilityId, body.capabilityId)
-    ),
-  });
-
-  if (existing) {
-    return c.json({ error: 'Agent already has this capability' }, 409);
-  }
-
-  const capId = generateId('ac_', 16);
-  const [added] = await db.insert(agentCapabilities).values({
-    id: capId,
-    agentId: id,
-    capabilityId: body.capabilityId,
-    endpoint: body.endpoint,
-  }).returning();
-
-  return c.json({
-    success: true,
-    capability: {
-      id: added.capabilityId,
-      endpoint: added.endpoint,
-      trustScore: added.trustScore,
-      verified: added.verified,
+  return jsonAns(c, {
+    agent: publicAgentView(agent),
+    apiKey: {
+      id: minted.prefix,
+      key: minted.key,
+      prefix: minted.prefix,
+      scopes: REGISTRATION_KEY_SCOPES,
+      spendCapMicrosPerDay: '0',
+      note: 'Shown once. Store it with your credentials; the registry keeps only its hash.',
+    },
+    trust: trustOf(agent),
+    sandboxCredit: SANDBOX_GRANT_MICROS.toString(),
+    next: {
+      mcpConfig: { mcpServers: { ans: { command: 'npx', args: ['-y', 'ans-mcp'] } } },
+      remoteMcp: { url: `${config.publicApiUrl}/mcp`, headers: { Authorization: `Bearer ${minted.key}` } },
+      skillUrl: ANS_LINKS.skill,
+      profileUrl: profileUrl(agent),
     },
   }, 201);
 });
 
-// Remove a capability from agent
-agentsRouter.delete('/:id/capabilities/:capabilityId', async (c) => {
-  const id = c.req.param('id');
-  const capabilityId = c.req.param('capabilityId');
+// ---------------------------------------------------------------------------
+// GET /v1/agents: list (sort=rank|new)
+// ---------------------------------------------------------------------------
 
-  // Check auth
-  const authHeader = c.req.header('Authorization');
-  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
-  const timestamp = c.req.header('X-Agent-Timestamp');
-  
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const result = await verifySessionToken(token);
-    if (!result.valid || result.agentId !== id) {
-      return c.json({ error: 'Invalid or expired session token' }, 401);
-    }
-  }
-  else if (privateKeyHeader && timestamp) {
-    const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
-    if (!agent) return c.json({ error: 'Agent not found' }, 404);
-    
-    const { sign, fromBase64, verify } = await import('ans-core');
-    try {
-      const testMessage = new TextEncoder().encode('verify');
-      const privateKey = fromBase64(privateKeyHeader);
-      const sig = await sign(testMessage, privateKey);
-      const publicKey = fromBase64(agent.publicKey);
-      const isValid = await verify(sig, testMessage, publicKey);
-      if (!isValid) return c.json({ error: 'Invalid private key' }, 401);
-    } catch {
-      return c.json({ error: 'Invalid private key format' }, 401);
-    }
-  }
-  else {
-    return c.json({ error: 'Authentication required' }, 401);
+function intQuery(value: string | undefined, fallback: number, min: number, max: number): number {
+  const n = parseInt(value ?? '', 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+const lastSeenDescNullsLast = sql`${agents.lastSeen} desc nulls last`;
+
+agentsRouter.get('/', async (c) => {
+  const limit = intQuery(c.req.query('limit'), 20, 1, 100);
+  const offset = intQuery(c.req.query('offset'), 0, 0, 1_000_000);
+  const sort = c.req.query('sort') === 'new' ? 'new' : 'rank';
+
+  const where = sort === 'rank'
+    ? and(eq(agents.isSeed, false), eq(agents.isHouse, false))
+    : eq(agents.isSeed, false);
+  const order = sort === 'rank'
+    ? [desc(agents.trustRank), lastSeenDescNullsLast, desc(agents.createdAt)]
+    : [desc(agents.createdAt)];
+
+  const [rows, [{ total }]] = await Promise.all([
+    db.select().from(agents).where(where).orderBy(...order).limit(limit).offset(offset),
+    db.select({ total: count() }).from(agents).where(where),
+  ]);
+
+  return jsonAns(c, { agents: rows.map(publicAgentView), total: Number(total), limit, offset, sort });
+});
+
+// ---------------------------------------------------------------------------
+// GET /v1/agents/:idOrHandle
+// ---------------------------------------------------------------------------
+
+export interface OfferSummary {
+  id: string;
+  name: string;
+  slug: string;
+  version: number;
+  title: string;
+  description: string | null;
+  tags: string[];
+  priceMicros: string;
+  acceptsSandbox: boolean;
+  status: string;
+  stats: OfferStats;
+  probeOk: boolean | null;
+  urls: { page: string; mcp: string; skill: string; inputSchema: string; outputSchema: string };
+}
+
+/** Active offers of an agent, highest version per slug. */
+export async function activeOfferSummaries(agent: Pick<AgentRow, 'id' | 'handle'>): Promise<OfferSummary[]> {
+  const rows = await db
+    .select()
+    .from(offers)
+    .where(and(eq(offers.agentId, agent.id), eq(offers.status, 'active')))
+    .orderBy(desc(offers.version), desc(offers.createdAt));
+  const bySlug = new Map<string, typeof rows[number]>();
+  for (const r of rows) if (!bySlug.has(r.slug)) bySlug.set(r.slug, r);
+  const handle = agent.handle ?? agent.id;
+  return Array.from(bySlug.values()).map((o) => ({
+    id: o.id,
+    name: offerName(agent.handle, o.slug, o.version),
+    slug: o.slug,
+    version: o.version,
+    title: o.title,
+    description: o.description,
+    tags: o.tags ?? [],
+    priceMicros: o.priceMicros.toString(),
+    acceptsSandbox: o.acceptsSandbox,
+    status: o.status,
+    stats: o.stats ?? {},
+    probeOk: o.probeOk,
+    urls: {
+      page: `${config.publicWebUrl}/offers/@${handle}/${o.slug}`,
+      mcp: `${config.publicApiUrl}/mcp/offer/@${handle}/${o.slug}`,
+      skill: `${config.publicApiUrl}/v1/offers/${o.id}/skill.md`,
+      inputSchema: `${config.publicApiUrl}/v1/offers/${o.id}/input.json`,
+      outputSchema: `${config.publicApiUrl}/v1/offers/${o.id}/output.json`,
+    },
+  }));
+}
+
+export async function vouchCount(agentId: string): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(attestations).where(eq(attestations.subjectId, agentId));
+  return Number(row?.n ?? 0);
+}
+
+agentsRouter.get('/:id', async (c) => {
+  const agent = await resolveAgent(c.req.param('id'));
+  if (!agent) return teach(c, 404, 'not_found', `Agent ${c.req.param('id')} not found`);
+  const [offerRows, vouches] = await Promise.all([activeOffersOf(agent.id), vouchCount(agent.id)]);
+  const offerList = offerRows.map((o) => toWireOfferSummary(o, agent));
+  return jsonAns(c, {
+    agent: publicAgentView(agent),
+    trust: trustOf(agent),
+    receiptCounts: receiptCountsOf(agent),
+    offers: offerList,
+    vouches,
+    policy: policyOf(agent),
+    urls: {
+      profile: profileUrl(agent),
+      receipts: `${config.publicApiUrl}/v1/agents/${agent.id}/receipts`,
+      trust: `${config.publicApiUrl}/v1/agents/${agent.id}/trust`,
+      verify: `${config.publicApiUrl}/v1/verify/${agent.handle ?? agent.id}`,
+      card: `${config.publicApiUrl}/v1/agents/${agent.id}/card`,
+    },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /v1/agents/:id (owner): profile, policy, status
+// ---------------------------------------------------------------------------
+
+const updateSchema = z.object({
+  name: z.string().min(1).max(64).optional(),
+  endpoint: z.string().url().max(2048).nullable().optional(),
+  protocols: z.array(protocolSchema).optional(),
+  description: z.string().max(500).nullable().optional(),
+  avatar: z.string().url().max(2048).nullable().optional(),
+  homepage: z.string().url().max(2048).nullable().optional(),
+  tags: tagsSchema.optional(),
+  operatorName: z.string().max(100).nullable().optional(),
+  linkedProfiles: linkedProfilesSchema.optional(),
+  paymentMethods: z.array(paymentMethodSchema).max(10).optional(),
+  status: statusSchema.optional(),
+  metadata: z.record(z.unknown()).optional(),
+  policy: AgentPolicySchema.partial().optional(),
+});
+
+const ownerAuth = requireAgent({ allow: ['signed', 'session'] });
+
+agentsRouter.patch('/:id', ownerAuth, requireOwner('id'), async (c) => {
+  const current = c.get('resolvedAgent');
+  const body = updateSchema.parse(await c.req.json());
+
+  if (body.paymentMethods) {
+    const v = validatePaymentMethods(body.paymentMethods);
+    if (!v.valid) return teach(c, 400, 'validation_error', v.error ?? 'Invalid payment methods');
   }
 
-  // Delete the capability
-  const deleted = await db.delete(agentCapabilities)
+  const set: Partial<typeof agents.$inferInsert> = { updatedAt: new Date() };
+  if (body.name !== undefined) set.name = sanitizeString(body.name, 64) ?? current.name;
+  if (body.endpoint !== undefined) set.endpoint = body.endpoint;
+  if (body.protocols !== undefined) set.protocols = body.protocols;
+  if (body.description !== undefined) set.description = body.description === null ? null : sanitizeString(body.description, 500) ?? null;
+  if (body.avatar !== undefined) set.avatar = body.avatar;
+  if (body.homepage !== undefined) set.homepage = body.homepage;
+  if (body.tags !== undefined) set.tags = body.tags;
+  if (body.operatorName !== undefined) set.operatorName = body.operatorName === null ? null : sanitizeString(body.operatorName, 100) ?? null;
+  if (body.linkedProfiles !== undefined) set.linkedProfiles = { ...(current.linkedProfiles ?? {}), ...body.linkedProfiles };
+  if (body.paymentMethods !== undefined) set.paymentMethods = body.paymentMethods;
+  if (body.status !== undefined) set.status = body.status;
+  if (body.metadata !== undefined) {
+    // Registry-owned keys (payment shortfall markers, funnel source) cannot be written by the owner
+    const owned = Object.fromEntries(Object.entries(body.metadata).filter(([k]) => !RESERVED_METADATA.test(k)));
+    set.metadata = { ...((current.metadata as Record<string, unknown> | null) ?? {}), ...owned };
+  }
+  if (body.policy !== undefined) set.policy = AgentPolicySchema.parse({ ...policyOf(current), ...body.policy });
+
+  const [updated] = await db.update(agents).set(set).where(eq(agents.id, current.id)).returning();
+  return jsonAns(c, { agent: publicAgentView(updated), policy: policyOf(updated) });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/agents/:id/heartbeat (owner)
+// ---------------------------------------------------------------------------
+
+/** Receipts proposed to this agent that it has not yet accepted or declined. */
+export async function pendingReceiptCount(agentId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(receipts)
     .where(and(
-      eq(agentCapabilities.agentId, id),
-      eq(agentCapabilities.capabilityId, capabilityId)
-    ))
-    .returning();
+      eq(receipts.state, 'proposed'),
+      ne(receipts.initiatorId, agentId),
+      or(eq(receipts.clientId, agentId), eq(receipts.providerId, agentId)),
+    ));
+  return Number(row?.n ?? 0);
+}
 
-  if (deleted.length === 0) {
-    return c.json({ error: 'Capability not found for this agent' }, 404);
+agentsRouter.post('/:id/heartbeat', requireAgent({ allow: ['signed', 'session', 'apikey'], scopes: ['read'] }), requireOwner('id'), async (c) => {
+  const agent = c.get('resolvedAgent');
+  const now = new Date();
+  const [updated] = await db.update(agents).set({ status: 'online', lastSeen: now, updatedAt: now }).where(eq(agents.id, agent.id)).returning({ lastSeen: agents.lastSeen });
+  const pendingReceipts = await pendingReceiptCount(agent.id);
+  return jsonAns(c, {
+    status: 'ok',
+    lastSeen: updated?.lastSeen ?? now,
+    pendingReceipts,
+    inbox: `${config.publicApiUrl}/v1/notifications`,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/agents/:id/status (owner)
+// ---------------------------------------------------------------------------
+
+agentsRouter.post('/:id/status', ownerAuth, requireOwner('id'), async (c) => {
+  const agent = c.get('resolvedAgent');
+  const { status } = z.object({ status: statusSchema }).parse(await c.req.json());
+  const now = new Date();
+  const [updated] = await db.update(agents).set({ status, lastSeen: now, updatedAt: now }).where(eq(agents.id, agent.id)).returning({ status: agents.status, lastSeen: agents.lastSeen });
+  return jsonAns(c, { status: updated.status, lastSeen: updated.lastSeen });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/agents/:id/transfer (keyonly): rotate the agent's key
+// ---------------------------------------------------------------------------
+
+const transferSchema = z.object({ newPublicKey: z.string().min(40).max(64) });
+
+agentsRouter.post('/:id/transfer', requireAgent({ allow: ['signed'], keyOnly: true }), requireOwner('id'), async (c) => {
+  const agent = c.get('resolvedAgent');
+  const { newPublicKey } = transferSchema.parse(await c.req.json());
+  if (!isEd25519PublicKey(newPublicKey)) {
+    return teach(c, 400, 'validation_error', 'newPublicKey must be a base64 Ed25519 public key (32 bytes)');
   }
+  if (newPublicKey === agent.publicKey) {
+    return teach(c, 400, 'bad_request', 'newPublicKey is the current key');
+  }
+  const [updated] = await db.update(agents).set({ publicKey: newPublicKey, updatedAt: new Date() }).where(eq(agents.id, agent.id)).returning();
+  return jsonAns(c, {
+    agent: publicAgentView(updated),
+    message: 'Key rotated. Sign every request from now on with the new private key; the old key no longer verifies. API keys are unchanged.',
+  });
+});
 
-  return c.json({ success: true, removed: capabilityId });
+// ---------------------------------------------------------------------------
+// API keys (14.6): POST keyonly, GET and DELETE owner
+// ---------------------------------------------------------------------------
+
+const microsSchema = z.union([z.string().regex(/^\d{1,20}$/), z.number().int().nonnegative()]).transform((v) => BigInt(v));
+
+const createKeySchema = z.object({
+  scopes: z.array(z.enum(API_KEY_SCOPES as [ApiKeyScope, ...ApiKeyScope[]])).min(1).max(4).optional(),
+  spendCapMicrosPerDay: microsSchema.optional(),
+  label: z.string().max(64).optional(),
+});
+
+const MAX_ACTIVE_KEYS = 20;
+
+function keyView(k: typeof apiKeys.$inferSelect) {
+  return {
+    id: k.id,
+    prefix: k.id,
+    label: k.label,
+    scopes: k.scopes ?? [],
+    spendCapMicrosPerDay: k.spendCapMicrosPerDay.toString(),
+    lastUsedAt: k.lastUsedAt,
+    createdAt: k.createdAt,
+    revokedAt: k.revokedAt,
+  };
+}
+
+agentsRouter.post('/:id/keys', requireAgent({ allow: ['signed'], keyOnly: true }), requireOwner('id'), async (c) => {
+  const agent = c.get('resolvedAgent');
+  const body = createKeySchema.parse(await c.req.json());
+  const [{ active }] = await db.select({ active: count() }).from(apiKeys).where(and(eq(apiKeys.agentId, agent.id), isNull(apiKeys.revokedAt)));
+  if (Number(active) >= MAX_ACTIVE_KEYS) {
+    return teach(c, 400, 'bad_request', `At most ${MAX_ACTIVE_KEYS} active API keys per agent; revoke one first`);
+  }
+  const minted = generateApiKey();
+  const scopes = Array.from(new Set(body.scopes ?? REGISTRATION_KEY_SCOPES)) as ApiKeyScope[];
+  const [row] = await db.insert(apiKeys).values({
+    id: minted.prefix,
+    keyHash: minted.hash,
+    agentId: agent.id,
+    label: body.label ? sanitizeString(body.label, 64) ?? null : null,
+    scopes,
+    spendCapMicrosPerDay: body.spendCapMicrosPerDay ?? 0n,
+  }).returning();
+  return jsonAns(c, {
+    ...keyView(row),
+    key: minted.key,
+    note: 'Shown once. The registry stores only the hash.',
+    remoteMcp: { url: `${config.publicApiUrl}/mcp`, headers: { Authorization: `Bearer ${minted.key}` } },
+  }, 201);
+});
+
+agentsRouter.get('/:id/keys', ownerAuth, requireOwner('id'), async (c) => {
+  const agent = c.get('resolvedAgent');
+  const rows = await db.select().from(apiKeys).where(eq(apiKeys.agentId, agent.id)).orderBy(desc(apiKeys.createdAt));
+  return jsonAns(c, { keys: rows.map(keyView) });
+});
+
+agentsRouter.delete('/:id/keys/:keyId', requireAgent({ allow: ['signed', 'session', 'apikey'] }), requireOwner('id'), async (c) => {
+  const agent = c.get('resolvedAgent');
+  const keyId = c.req.param('keyId');
+  const auth = c.get('agent');
+  // An API key may revoke itself (a leaked key can always be killed by whoever holds it), never another key
+  if (auth.method === 'apikey' && auth.keyId !== keyId) {
+    return teach(c, 403, 'forbidden', 'An API key can only revoke itself; revoke other keys with a signed request or a browser session');
+  }
+  const [row] = await db
+    .update(apiKeys)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(apiKeys.agentId, agent.id), eq(apiKeys.id, keyId), isNull(apiKeys.revokedAt)))
+    .returning();
+  if (!row) return teach(c, 404, 'not_found', `No active key ${keyId} on this agent`);
+  return jsonAns(c, { revoked: true, key: keyView(row) });
 });
 
 export { agentsRouter };

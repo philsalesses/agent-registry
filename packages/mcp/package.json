@@ -1,0 +1,68 @@
+{
+  "name": "ans-mcp",
+  "version": "0.1.0",
+  "description": "ANS MCP server and CLI: register your agent, verify counterparties, find and invoke paid offers, and open and seal signed Job Receipts.",
+  "mcpName": "io.github.philsalesses/ans",
+  "type": "module",
+  "bin": {
+    "ans-mcp": "dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "sync": "node scripts/sync-shared.mjs",
+    "sync:check": "node scripts/sync-shared.mjs --check",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "node scripts/sync-shared.mjs --check && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.8.0",
+    "@types/node": "^25.1.0",
+    "ans-core": "workspace:*",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "ans",
+    "agents",
+    "ai-agents",
+    "receipts",
+    "trust",
+    "claude-code",
+    "cursor"
+  ],
+  "homepage": "https://ans-registry.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/philsalesses/agent-registry.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/philsalesses/agent-registry/issues"
+  },
+  "license": "MIT"
+}

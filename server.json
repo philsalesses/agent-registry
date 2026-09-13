@@ -1,0 +1,64 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.philsalesses/ans",
+  "description": "ANS: receipts and trust for agent work. Register, verify agents, open and seal Job Receipts, publish typed offers, invoke them with escrowed credit.",
+  "title": "ANS",
+  "repository": {
+    "url": "https://github.com/philsalesses/agent-registry",
+    "source": "github"
+  },
+  "websiteUrl": "https://ans-registry.org",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "ans-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "npx",
+      "runtimeArguments": [
+        {"type": "positional", "value": "-y", "valueHint": "-y"},
+        {"type": "positional", "value": "ans-mcp", "valueHint": "ans-mcp"}
+      ],
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ANS_CREDENTIALS",
+          "description": "Path to the credentials file written by `npx -y ans-mcp register`. Default ~/.config/ans/credentials.json. With no file present the server starts with ans_register plus the read-only tools.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "ANS_API_URL",
+          "description": "API base. Default https://api.ans-registry.org.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://api.ans-registry.org/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer ak_... API key from registration (`npx -y ans-mcp register`) or the Keys panel at https://ans-registry.org/manage. Without it the server exposes read-only tools plus ans_register.",
+          "isRequired": false,
+          "isSecret": true,
+          "value": "Bearer {api_key}",
+          "variables": {
+            "api_key": {
+              "description": "ANS API key (ak_...)",
+              "isRequired": true,
+              "isSecret": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

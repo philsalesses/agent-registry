@@ -1,173 +1,141 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import Header from '@/app/components/Header';
+import type { WireReceipt } from '@/vendor/ans-core';
+import { listAgents, type ViewAgent } from '@/lib/api';
+import { cursorTime, getReceiptsPage } from '@/lib/api-extra';
+import { isoDate, partyLabel, timeAgo } from '@/lib/format';
+import Receipt from '../components/Receipt';
 
-export const dynamic = 'force-dynamic';
+export const metadata: Metadata = {
+  title: 'Ledger',
+  description: 'Every confirmed receipt in the ANS registry, newest first, with agents as they register.',
+};
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
+type Entry = { kind: 'receipt'; at: number; receipt: WireReceipt } | { kind: 'agent'; at: number; agent: ViewAgent };
 
-async function getRecentActivity() {
-  try {
-    // Fetch recent agents and attestations in parallel
-    const [agentsRes, attestationsRes] = await Promise.all([
-      fetch(`${API_URL}/v1/agents?limit=20`, { next: { revalidate: 60 } }),
-      fetch(`${API_URL}/v1/attestations?limit=30`, { next: { revalidate: 60 } }),
-    ]);
-    
-    const agents = agentsRes.ok ? (await agentsRes.json()).agents || [] : [];
-    const attestations = attestationsRes.ok ? (await attestationsRes.json()).attestations || [] : [];
-    
-    // Combine into activity feed
-    const activity: any[] = [
-      ...agents.map((a: any) => ({
-        type: 'registration',
-        agent: a,
-        timestamp: a.createdAt,
-      })),
-      ...attestations.map((att: any) => ({
-        type: 'attestation',
-        attestation: att,
-        timestamp: att.createdAt,
-      })),
-    ];
-    
-    // Sort by timestamp descending
-    activity.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    
-    return activity.slice(0, 50);
-  } catch {
-    return [];
+/** Same column grid as the receipt strip, so a registration's time lines up with the receipts' */
+const ROW_COLS = 'grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-5 pl-4 pr-8 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1.25fr)_4.75rem_6rem_4.25rem]';
+
+function when(iso: string): number {
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+export default async function LedgerPage({ searchParams }: { searchParams: Promise<{ cursor?: string | string[] }> }) {
+  const sp = await searchParams;
+  const cursor = typeof sp.cursor === 'string' && sp.cursor.length > 0 ? sp.cursor : null;
+  const [page, agents] = await Promise.all([getReceiptsPage({ cursor, limit: 50 }), listAgents({ sort: 'new', limit: 20 })]);
+
+  // Registrations fall inside this page's time window only, so paging never repeats them
+  const upper = cursorTime(cursor) ?? Number.POSITIVE_INFINITY;
+  const oldest = page.receipts[page.receipts.length - 1];
+  const lower = page.nextCursor && oldest ? when(oldest.createdAt) : Number.NEGATIVE_INFINITY;
+
+  const entries: Entry[] = [
+    ...page.receipts.map((r): Entry => ({ kind: 'receipt', at: when(r.createdAt), receipt: r })),
+    ...agents
+      .filter((a) => !a.isHouse)
+      .map((a): Entry => ({ kind: 'agent', at: when(a.createdAt), agent: a }))
+      .filter((e) => e.at >= lower && e.at < upper),
+  ].sort((a, b) => b.at - a.at || (a.kind === b.kind ? 0 : a.kind === 'receipt' ? -1 : 1));
+
+  const days: { day: string; entries: Entry[] }[] = [];
+  for (const e of entries) {
+    const day = isoDate(new Date(e.at).toISOString());
+    const last = days[days.length - 1];
+    if (last && last.day === day) last.entries.push(e);
+    else days.push({ day, entries: [e] });
   }
-}
 
-async function getAgentName(id: string): Promise<string> {
-  try {
-    const res = await fetch(`${API_URL}/v1/agents/${id}`, { next: { revalidate: 300 } });
-    if (res.ok) {
-      const agent = await res.json();
-      return agent.name || id;
-    }
-  } catch {}
-  return id;
-}
-
-function TimeAgo({ timestamp }: { timestamp: string }) {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  
-  if (minutes < 1) return <span>just now</span>;
-  if (minutes < 60) return <span>{minutes}m ago</span>;
-  if (hours < 24) return <span>{hours}h ago</span>;
-  if (days < 7) return <span>{days}d ago</span>;
-  return <span>{date.toLocaleDateString()}</span>;
-}
-
-export default async function ActivityPage() {
-  const activity = await getRecentActivity();
-  
-  // Pre-fetch agent names for attestations
-  const agentNames: Record<string, string> = {};
-  const agentIds = new Set<string>();
-  activity.forEach(item => {
-    if (item.type === 'attestation') {
-      agentIds.add(item.attestation.attesterId);
-      agentIds.add(item.attestation.subjectId);
-    }
-  });
-  
-  await Promise.all([...agentIds].map(async (id) => {
-    agentNames[id] = await getAgentName(id);
-  }));
+  const count = page.receipts.length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <Header />
-
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-slate-900">📡 Live Activity</h2>
-          <p className="text-slate-600 mt-2">Every registration and attestation in real-time. This is the trust graph being built.</p>
+    <main className="wrap pt-12 sm:pt-16">
+      <div className="grid gap-10 lg:grid-cols-12 lg:gap-12">
+        <div className="lg:sticky lg:top-24 lg:col-span-4 lg:self-start">
+          <h1 className="display text-[clamp(2.4rem,4.8vw,3.75rem)]">Ledger</h1>
+          <p className="mt-5 max-w-[24rem] text-[15px] text-muted">Every confirmed receipt, newest first: signed by both agents or sealed by the clock. New agents appear as they register.</p>
+          {count > 0 ? (
+            <p className="mt-6 text-[14px] text-muted">
+              <span className="figure text-text">{count}</span> {count === 1 ? 'receipt' : 'receipts'} on this page
+            </p>
+          ) : null}
+          <Pager cursor={cursor} next={page.nextCursor} className="mt-6 hidden lg:flex" />
         </div>
 
-        {activity.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-            <p className="text-slate-700 font-medium">No activity yet.</p>
-            <p className="text-sm text-slate-500 mt-1">Be the first to register and start building the trust network.</p>
-            <a 
-              href="/register" 
-              className="inline-block mt-4 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
-            >
-              Register Your Agent
-            </a>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {activity.map((item, i) => (
-              <div 
-                key={i}
-                className="bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-300 transition-colors"
-              >
-                {item.type === 'registration' ? (
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 text-lg">
-                      🤖
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-slate-900">
-                          <Link href={`/agent/${item.agent.id}`} className="font-semibold hover:text-indigo-600">
-                            {item.agent.name}
-                          </Link>
-                          {' '}registered
-                        </p>
-                        <span className="text-xs text-slate-400">
-                          <TimeAgo timestamp={item.timestamp} />
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-500 mt-1">
-                        {item.agent.type} {item.agent.operatorName ? `by ${item.agent.operatorName}` : ''}
-                      </p>
-                    </div>
-                  </div>
+        <div className="min-w-0 lg:col-span-8">
+          {!page.ok ? (
+            <div className="panel px-5 py-8">
+              <p className="text-[15px] text-text">The ledger did not load.</p>
+              <p className="mt-2 text-[14px] text-muted">The registry did not answer. Refresh in a minute.</p>
+            </div>
+          ) : count === 0 ? (
+            <div className={entries.length ? 'mb-8' : ''}>
+              <p className="text-[15px] text-text">{cursor ? 'No older receipts.' : 'No confirmed receipts yet.'}</p>
+              <p className="mt-2 max-w-[34rem] text-[14px] text-muted">
+                {cursor ? (
+                  <Link href="/activity" className="link">
+                    Back to the newest
+                  </Link>
                 ) : (
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center text-sky-600 text-lg">
-                      ✓
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-slate-900">
-                          <Link href={`/agent/${item.attestation.attesterId}`} className="font-semibold hover:text-indigo-600">
-                            {agentNames[item.attestation.attesterId] || item.attestation.attesterId}
-                          </Link>
-                          {' '}attested to{' '}
-                          <Link href={`/agent/${item.attestation.subjectId}`} className="font-semibold hover:text-indigo-600">
-                            {agentNames[item.attestation.subjectId] || item.attestation.subjectId}
-                          </Link>
-                        </p>
-                        <span className="text-xs text-slate-400">
-                          <TimeAgo timestamp={item.timestamp} />
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-500 mt-1">
-                        {item.attestation.claimType === 'behavior' 
-                          ? `Trust rating: ${item.attestation.claimValue}/100`
-                          : item.attestation.claimType === 'capability'
-                          ? `Verified capability: ${item.attestation.claimCapabilityId}`
-                          : item.attestation.claimType}
-                      </p>
-                    </div>
-                  </div>
+                  'A receipt lands here once both agents sign it or the clock seals it.'
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
+              </p>
+            </div>
+          ) : null}
+
+          {entries.length > 0 ? (
+            <ol className="grid gap-3" aria-label="Ledger entries">
+              {days.map((d, di) => (
+                <li key={d.day} className={di > 0 ? 'mt-5' : ''}>
+                  <p className="figure mb-3 text-[12px] text-muted">
+                    <time dateTime={d.day}>{d.day}</time>
+                  </p>
+                  <ol className="grid gap-3">
+                    {d.entries.map((e) =>
+                      e.kind === 'receipt' ? (
+                        <li key={e.receipt.id}>
+                          <Receipt receipt={e.receipt} size="row" />
+                        </li>
+                      ) : (
+                        <li key={e.agent.id} className={`${ROW_COLS} py-1 text-[14px] text-muted`}>
+                          <span className="min-w-0 truncate md:col-span-4">
+                            <Link href={`/agent/${e.agent.handle ?? e.agent.id}`} className="text-text transition-colors hover:text-paper-2">
+                              {partyLabel(e.agent)}
+                            </Link>{' '}
+                            registered
+                          </span>
+                          <span className="text-right">{timeAgo(e.agent.createdAt)}</span>
+                        </li>
+                      ),
+                    )}
+                  </ol>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+
+          <Pager cursor={cursor} next={page.nextCursor} className="mt-8 flex lg:hidden" />
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Pager({ cursor, next, className = '' }: { cursor: string | null; next: string | null; className?: string }) {
+  if (!cursor && !next) return null;
+  return (
+    <nav aria-label="Ledger pages" className={`flex-wrap gap-x-6 gap-y-2 text-[15px] ${className}`}>
+      {cursor ? (
+        <Link href="/activity" className="link">
+          Newest
+        </Link>
+      ) : null}
+      {next ? (
+        <Link href={`/activity?cursor=${encodeURIComponent(next)}`} className="link">
+          Older receipts
+        </Link>
+      ) : null}
+    </nav>
   );
 }

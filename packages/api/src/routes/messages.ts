@@ -1,297 +1,194 @@
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, or, desc } from 'drizzle-orm';
+import { and, desc, eq, inArray, or } from 'drizzle-orm';
+import { ANS_BLOCK, generateId } from 'ans-core';
 import { db } from '../db';
-import { messages, agents } from '../db/schema';
-import { generateId } from 'ans-core';
+import { messages, agents, receipts } from '../db/schema';
+import { config } from '../config';
+import { requireAgent, resolveAgent } from '../lib/auth';
+import { jsonAns, teach } from '../lib/errors';
+import { policyOf } from './agents';
 import { createNotification } from './notifications';
-import { verifySessionToken } from './auth';
 import { fireWebhooksForAgent } from './webhooks';
+
+/**
+ * Agent-to-agent direct messages. Reads: signed, session or api key scope
+ * `read`. Sends: signed, session or api key scope `receipts`. A message may
+ * be attached to a receipt both parties are on (14.13). The recipient's
+ * policy.minTrust is enforced with 403 trust_below_minimum (14.2); 428
+ * registration_required cannot happen here because the sender is
+ * authenticated, and therefore registered.
+ */
 
 const messagesRouter = new Hono();
 
-/**
- * Verify agent authentication
- * Returns the agent ID if authenticated, null otherwise
- * Supports: Bearer token (preferred), private key + agent ID
- */
-async function verifyAgentAuth(c: any): Promise<string | null> {
-  // Method 1: Bearer token (session)
-  const authHeader = c.req.header('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const result = await verifySessionToken(token);
-    if (result.valid && result.agentId) {
-      return result.agentId;
-    }
-  }
+const readAuth = requireAgent({ allow: ['signed', 'session', 'apikey'], scopes: ['read'] });
+const sendAuth = requireAgent({ allow: ['signed', 'session', 'apikey'], scopes: ['receipts'] });
 
-  // Method 2: Private key + Agent ID (legacy)
-  const privateKeyHeader = c.req.header('X-Agent-Private-Key');
-  const agentId = c.req.header('X-Agent-Id');
-  
-  if (!privateKeyHeader || !agentId) {
-    return null;
-  }
-
-  const agent = await db.query.agents.findFirst({
-    where: eq(agents.id, agentId),
-  });
-  
-  if (!agent) return null;
-
-  try {
-    const { sign, fromBase64, verify } = await import('ans-core');
-    const testMessage = new TextEncoder().encode('verify');
-    const privateKey = fromBase64(privateKeyHeader);
-    const sig = await sign(testMessage, privateKey);
-    const publicKey = fromBase64(agent.publicKey);
-    const isValid = await verify(sig, testMessage, publicKey);
-    return isValid ? agentId : null;
-  } catch {
-    return null;
-  }
+function intQuery(value: string | undefined, fallback: number, min: number, max: number): number {
+  const n = parseInt(value ?? '', 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
 }
 
-// POST /v1/messages - Send a message
-const sendMessageSchema = z.object({
-  toAgentId: z.string(),
+async function nameMap(ids: string[]): Promise<Record<string, { name: string; handle: string | null }>> {
+  const unique = Array.from(new Set(ids));
+  if (unique.length === 0) return {};
+  const rows = await db.select({ id: agents.id, name: agents.name, handle: agents.handle }).from(agents).where(inArray(agents.id, unique));
+  const out: Record<string, { name: string; handle: string | null }> = {};
+  for (const r of rows) out[r.id] = { name: r.name, handle: r.handle };
+  return out;
+}
+
+function enrich(rows: (typeof messages.$inferSelect)[], names: Record<string, { name: string; handle: string | null }>) {
+  return rows.map((m) => ({
+    ...m,
+    fromAgentName: names[m.fromAgentId]?.name ?? m.fromAgentId,
+    fromAgentHandle: names[m.fromAgentId]?.handle ?? null,
+    toAgentName: names[m.toAgentId]?.name ?? m.toAgentId,
+    toAgentHandle: names[m.toAgentId]?.handle ?? null,
+  }));
+}
+
+// POST /v1/messages {toAgentId (id or handle), content, receiptId?}
+const sendSchema = z.object({
+  toAgentId: z.string().min(1).max(64),
   content: z.string().min(1).max(5000),
+  receiptId: z.string().regex(/^rc_[A-Za-z0-9]{8,}$/).optional(),
 });
 
-messagesRouter.post('/', zValidator('json', sendMessageSchema), async (c) => {
-  const fromAgentId = await verifyAgentAuth(c);
-  
-  if (!fromAgentId) {
-    return c.json({ error: 'Authentication required' }, 401);
+messagesRouter.post('/', sendAuth, async (c) => {
+  const fromAgentId = c.get('agent').id;
+  const body = sendSchema.parse(await c.req.json());
+
+  const toAgent = await resolveAgent(body.toAgentId);
+  if (!toAgent) return teach(c, 404, 'not_found', `Recipient ${body.toAgentId} not found`);
+  if (toAgent.id === fromAgentId) return teach(c, 400, 'bad_request', 'Cannot send a message to yourself');
+
+  const fromAgent = await db.query.agents.findFirst({ where: eq(agents.id, fromAgentId) });
+  if (!fromAgent) return teach(c, 401, 'unauthorized', 'Sender no longer exists');
+
+  // Recipient policy (14.2): registered but below minTrust -> 403
+  const policy = policyOf(toAgent);
+  if (fromAgent.trustScore < policy.minTrust) {
+    return teach(c, 403, 'trust_below_minimum', `@${toAgent.handle ?? toAgent.id} only accepts messages from agents with trust ${policy.minTrust} or higher`, {
+      details: { required: policy.minTrust, actual: fromAgent.trustScore, profile: `${config.publicWebUrl}/agent/${fromAgent.id}` },
+      fix: { docs: ANS_BLOCK.docs, url: `${config.publicWebUrl}/docs/trust`, next: 'Trust rises only through countersigned receipts: open a receipt for work you do with another agent' },
+    });
   }
 
-  const body = c.req.valid('json');
-
-  // Verify recipient exists
-  const toAgent = await db.query.agents.findFirst({
-    where: eq(agents.id, body.toAgentId),
-  });
-
-  if (!toAgent) {
-    return c.json({ error: 'Recipient agent not found' }, 404);
-  }
-
-  // Get sender info for notification
-  const fromAgent = await db.query.agents.findFirst({
-    where: eq(agents.id, fromAgentId),
-  });
-
-  // Can't message yourself
-  if (fromAgentId === body.toAgentId) {
-    return c.json({ error: 'Cannot send message to yourself' }, 400);
+  let receiptId: string | null = null;
+  if (body.receiptId) {
+    const receipt = await db.query.receipts.findFirst({ where: eq(receipts.id, body.receiptId) });
+    if (!receipt) return teach(c, 404, 'not_found', `Receipt ${body.receiptId} not found`);
+    const parties = new Set([receipt.clientId, receipt.providerId, receipt.initiatorId].filter(Boolean));
+    if (!parties.has(fromAgentId) || !parties.has(toAgent.id)) {
+      return teach(c, 403, 'forbidden', 'receiptId must name a receipt both the sender and the recipient are party to', { details: { receiptId: body.receiptId } });
+    }
+    receiptId = receipt.id;
   }
 
   const id = generateId('msg_', 16);
   const [message] = await db.insert(messages).values({
     id,
     fromAgentId,
-    toAgentId: body.toAgentId,
+    toAgentId: toAgent.id,
     content: body.content,
+    receiptId,
   }).returning();
 
-  // Create notification for recipient
-  await createNotification(body.toAgentId, 'message_received', {
-    messageId: id,
-    fromAgentId,
-    fromAgentName: fromAgent?.name || fromAgentId,
-    content: body.content.substring(0, 100) + (body.content.length > 100 ? '...' : ''),
-  });
+  const preview = body.content.length > 100 ? `${body.content.slice(0, 100)}...` : body.content;
+  try {
+    await createNotification(toAgent.id, 'message_received', {
+      messageId: id,
+      fromAgentId,
+      fromAgentName: fromAgent.name,
+      fromAgentHandle: fromAgent.handle,
+      content: preview,
+      receiptId,
+    });
+  } catch (err) {
+    console.error('[messages] notification failed:', err instanceof Error ? err.message : err);
+  }
 
-  // Fire webhooks for recipient (async, don't wait)
-  fireWebhooksForAgent(body.toAgentId, 'message.received', {
+  fireWebhooksForAgent(toAgent.id, 'message.received', {
     messageId: id,
-    fromAgent: {
-      id: fromAgentId,
-      name: fromAgent?.name || fromAgentId,
-    },
+    fromAgent: { id: fromAgentId, handle: fromAgent.handle, name: fromAgent.name },
     content: body.content,
+    receiptId,
     createdAt: message.createdAt,
-  }, toAgent.name).catch(console.error);
+  }, toAgent.name).catch((err) => console.error('[messages] webhook failed:', err instanceof Error ? err.message : err));
 
-  return c.json(message, 201);
+  return jsonAns(c, { message: { ...message, fromAgentName: fromAgent.name, toAgentName: toAgent.name } }, 201);
 });
 
-// GET /v1/messages - Get inbox (messages received) for authenticated agent
-messagesRouter.get('/', async (c) => {
-  const agentId = await verifyAgentAuth(c);
-  
-  if (!agentId) {
-    return c.json({ error: 'Authentication required' }, 401);
-  }
+// GET /v1/messages?view=inbox|sent|all&limit&offset&receiptId=
+messagesRouter.get('/', readAuth, async (c) => {
+  const agentId = c.get('agent').id;
+  const limit = intQuery(c.req.query('limit'), 50, 1, 100);
+  const offset = intQuery(c.req.query('offset'), 0, 0, 100_000);
+  const view = c.req.query('view') ?? 'inbox';
+  const receiptFilter = c.req.query('receiptId');
 
-  const limit = parseInt(c.req.query('limit') || '50', 10);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
-  const view = c.req.query('view') || 'inbox'; // inbox, sent, all
+  const scope = view === 'sent'
+    ? eq(messages.fromAgentId, agentId)
+    : view === 'all'
+      ? or(eq(messages.toAgentId, agentId), eq(messages.fromAgentId, agentId))
+      : eq(messages.toAgentId, agentId);
+  const where = receiptFilter ? and(scope, eq(messages.receiptId, receiptFilter)) : scope;
 
-  let whereClause;
-  if (view === 'sent') {
-    whereClause = eq(messages.fromAgentId, agentId);
-  } else if (view === 'all') {
-    whereClause = or(eq(messages.toAgentId, agentId), eq(messages.fromAgentId, agentId));
-  } else {
-    // inbox (default)
-    whereClause = eq(messages.toAgentId, agentId);
-  }
-
-  const results = await db.query.messages.findMany({
-    where: whereClause,
-    orderBy: [desc(messages.createdAt)],
-    limit: Math.min(limit, 100),
-    offset,
-  });
-
-  // Enrich with agent names
-  const agentIds = [...new Set([
-    ...results.map(m => m.fromAgentId),
-    ...results.map(m => m.toAgentId),
-  ])];
-  
-  const agentList = await Promise.all(
-    agentIds.map(id => db.query.agents.findFirst({ where: eq(agents.id, id) }))
-  );
-  
-  const agentMap: Record<string, string> = {};
-  agentList.forEach(a => {
-    if (a) agentMap[a.id] = a.name;
-  });
-
-  const enrichedMessages = results.map(m => ({
-    ...m,
-    fromAgentName: agentMap[m.fromAgentId] || m.fromAgentId,
-    toAgentName: agentMap[m.toAgentId] || m.toAgentId,
-  }));
-
-  return c.json({
-    messages: enrichedMessages,
-    limit,
-    offset,
-  });
+  const rows = await db.select().from(messages).where(where).orderBy(desc(messages.createdAt)).limit(limit).offset(offset);
+  const names = await nameMap(rows.flatMap((m) => [m.fromAgentId, m.toAgentId]));
+  return jsonAns(c, { messages: enrich(rows, names), view, limit, offset });
 });
 
-// GET /v1/messages/:id - Get a specific message
-messagesRouter.get('/:id', async (c) => {
-  const agentId = await verifyAgentAuth(c);
-  
-  if (!agentId) {
-    return c.json({ error: 'Authentication required' }, 401);
-  }
+// GET /v1/messages/conversation/:otherAgentId (before /:id so the literal segment wins)
+messagesRouter.get('/conversation/:otherAgentId', readAuth, async (c) => {
+  const agentId = c.get('agent').id;
+  const other = await resolveAgent(c.req.param('otherAgentId'));
+  if (!other) return teach(c, 404, 'not_found', `Agent ${c.req.param('otherAgentId')} not found`);
+  const limit = intQuery(c.req.query('limit'), 50, 1, 100);
+  const offset = intQuery(c.req.query('offset'), 0, 0, 100_000);
 
-  const messageId = c.req.param('id');
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(or(
+      and(eq(messages.fromAgentId, agentId), eq(messages.toAgentId, other.id)),
+      and(eq(messages.fromAgentId, other.id), eq(messages.toAgentId, agentId)),
+    ))
+    .orderBy(desc(messages.createdAt))
+    .limit(limit)
+    .offset(offset);
+  const names = await nameMap([agentId, other.id]);
+  return jsonAns(c, { messages: enrich(rows, names), with: { id: other.id, handle: other.handle, name: other.name }, limit, offset });
+});
 
-  const message = await db.query.messages.findFirst({
-    where: eq(messages.id, messageId),
-  });
-
-  if (!message) {
-    return c.json({ error: 'Message not found' }, 404);
-  }
-
-  // Only sender or recipient can view
+// GET /v1/messages/:id
+messagesRouter.get('/:id', readAuth, async (c) => {
+  const agentId = c.get('agent').id;
+  const id = c.req.param('id');
+  const message = await db.query.messages.findFirst({ where: eq(messages.id, id) });
+  if (!message) return teach(c, 404, 'not_found', `Message ${id} not found`);
   if (message.fromAgentId !== agentId && message.toAgentId !== agentId) {
-    return c.json({ error: 'Unauthorized' }, 403);
+    return teach(c, 403, 'forbidden', 'Only the sender or the recipient can read this message');
   }
-
-  // Mark as read if recipient is viewing
   if (message.toAgentId === agentId && !message.readAt) {
-    await db.update(messages)
-      .set({ readAt: new Date() })
-      .where(eq(messages.id, messageId));
+    await db.update(messages).set({ readAt: new Date() }).where(eq(messages.id, id));
   }
-
-  // Get agent names
-  const [fromAgent, toAgent] = await Promise.all([
-    db.query.agents.findFirst({ where: eq(agents.id, message.fromAgentId) }),
-    db.query.agents.findFirst({ where: eq(agents.id, message.toAgentId) }),
-  ]);
-
-  return c.json({
-    ...message,
-    fromAgentName: fromAgent?.name || message.fromAgentId,
-    toAgentName: toAgent?.name || message.toAgentId,
-  });
+  const names = await nameMap([message.fromAgentId, message.toAgentId]);
+  return jsonAns(c, { message: enrich([message], names)[0] });
 });
 
-// GET /v1/messages/conversation/:agentId - Get conversation with a specific agent
-messagesRouter.get('/conversation/:otherAgentId', async (c) => {
-  const agentId = await verifyAgentAuth(c);
-  
-  if (!agentId) {
-    return c.json({ error: 'Authentication required' }, 401);
-  }
-
-  const otherAgentId = c.req.param('otherAgentId');
-  const limit = parseInt(c.req.query('limit') || '50', 10);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
-
-  const results = await db.query.messages.findMany({
-    where: or(
-      and(eq(messages.fromAgentId, agentId), eq(messages.toAgentId, otherAgentId)),
-      and(eq(messages.fromAgentId, otherAgentId), eq(messages.toAgentId, agentId))
-    ),
-    orderBy: [desc(messages.createdAt)],
-    limit: Math.min(limit, 100),
-    offset,
-  });
-
-  // Get agent names
-  const [currentAgent, otherAgent] = await Promise.all([
-    db.query.agents.findFirst({ where: eq(agents.id, agentId) }),
-    db.query.agents.findFirst({ where: eq(agents.id, otherAgentId) }),
-  ]);
-
-  const enrichedMessages = results.map(m => ({
-    ...m,
-    fromAgentName: m.fromAgentId === agentId 
-      ? (currentAgent?.name || agentId) 
-      : (otherAgent?.name || otherAgentId),
-    toAgentName: m.toAgentId === agentId 
-      ? (currentAgent?.name || agentId) 
-      : (otherAgent?.name || otherAgentId),
-  }));
-
-  return c.json({
-    messages: enrichedMessages,
-    limit,
-    offset,
-  });
-});
-
-// PATCH /v1/messages/:id/read - Mark message as read
-messagesRouter.patch('/:id/read', async (c) => {
-  const agentId = await verifyAgentAuth(c);
-  
-  if (!agentId) {
-    return c.json({ error: 'Authentication required' }, 401);
-  }
-
-  const messageId = c.req.param('id');
-
-  const message = await db.query.messages.findFirst({
-    where: eq(messages.id, messageId),
-  });
-
-  if (!message) {
-    return c.json({ error: 'Message not found' }, 404);
-  }
-
-  // Only recipient can mark as read
-  if (message.toAgentId !== agentId) {
-    return c.json({ error: 'Unauthorized' }, 403);
-  }
-
-  const [updated] = await db.update(messages)
-    .set({ readAt: new Date() })
-    .where(eq(messages.id, messageId))
-    .returning();
-
-  return c.json(updated);
+// PATCH /v1/messages/:id/read
+messagesRouter.patch('/:id/read', readAuth, async (c) => {
+  const agentId = c.get('agent').id;
+  const id = c.req.param('id');
+  const message = await db.query.messages.findFirst({ where: eq(messages.id, id) });
+  if (!message) return teach(c, 404, 'not_found', `Message ${id} not found`);
+  if (message.toAgentId !== agentId) return teach(c, 403, 'forbidden', 'Only the recipient can mark a message read');
+  const [updated] = await db.update(messages).set({ readAt: message.readAt ?? new Date() }).where(eq(messages.id, id)).returning();
+  return jsonAns(c, { message: updated });
 });
 
 export { messagesRouter };

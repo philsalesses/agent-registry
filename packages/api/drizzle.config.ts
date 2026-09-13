@@ -1,10 +1,12 @@
+import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 
+// drizzle-kit 0.20.x format (driver + connectionString)
 export default defineConfig({
   schema: './src/db/schema.ts',
   out: './drizzle',
-  dialect: 'postgresql',
+  driver: 'pg',
   dbCredentials: {
-    url: process.env.DATABASE_URL || 'postgres://localhost:5432/agent_registry',
+    connectionString: process.env.DATABASE_URL || 'postgres://localhost:5433/agent_registry_dev',
   },
 });

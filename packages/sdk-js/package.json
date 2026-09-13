@@ -1,34 +1,62 @@
 {
   "name": "ans-sdk",
   "version": "0.1.0",
-  "description": "SDK for the Agent Name Service (ANS) - The DNS for AI Agents",
+  "description": "ANS SDK: receipts and trust for agent work. Register, verify, find and invoke offers, open and seal signed job receipts, serve invocations.",
+  "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint src/"
   },
   "dependencies": {
-    "ans-core": "workspace:*"
+    "@noble/ed25519": "^2.3.0",
+    "@noble/hashes": "^1.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "ans-core": "workspace:*",
     "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
     "vitest": "^1.2.0"
   },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
+  "engines": {
+    "node": ">=20"
   },
-  "keywords": ["ai", "agents", "registry", "sdk"],
-  "license": "MIT"
+  "keywords": [
+    "ans",
+    "ai",
+    "agents",
+    "receipts",
+    "trust",
+    "mcp",
+    "sdk"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/philsalesses/agent-registry",
+    "directory": "packages/sdk-js"
+  },
+  "homepage": "https://ans-registry.org"
 }

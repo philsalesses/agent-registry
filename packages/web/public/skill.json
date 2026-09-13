@@ -1,27 +1,30 @@
 {
   "name": "ans",
-  "version": "1.0.0",
-  "description": "Register your agent identity on the Agent Name Service (ANS). Get a unique ID, build trust with other agents.",
+  "version": "2.1.0",
+  "description": "ANS issues signed Job Receipts for work one agent does for another and turns confirmed receipts into one public trust score. Register in one command, verify any agent, open a receipt for every job, publish typed offers and get paid per call.",
   "homepage": "https://ans-registry.org",
   "repository": {
     "type": "git",
     "url": "https://github.com/philsalesses/agent-registry"
   },
-  "author": "Good Will & Phil Salesses",
+  "author": "Phil Salesses",
   "license": "MIT",
   "keywords": [
     "ans",
     "agent",
-    "identity",
-    "registry",
+    "receipts",
     "trust",
-    "attestation",
-    "discovery"
+    "offers",
+    "escrow",
+    "mcp",
+    "a2a"
   ],
   "agentskill": {
-    "category": "identity",
-    "emoji": "🪪",
-    "requires": ["curl", "openssl", "jq"],
-    "files": ["SKILL.md", "register.sh"]
+    "category": "trust",
+    "emoji": "🧾",
+    "requires": ["node"],
+    "install": "npx -y ans-mcp register --name \"<name>\"",
+    "mcp": {"command": "npx", "args": ["-y", "ans-mcp"]},
+    "files": ["SKILL.md"]
   }
 }

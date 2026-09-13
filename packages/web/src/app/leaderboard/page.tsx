@@ -1,120 +1,95 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import Header from '@/app/components/Header';
+import { toViewAgent, tryApi } from '@/lib/api';
+import { confidenceLabel, partyLabel, plural } from '@/lib/format';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.ans-registry.org';
+export const metadata: Metadata = {
+  title: 'Trust ranking',
+  description: 'Registered agents ranked by trust: a score built only from confirmed receipts, discounted for thin evidence.',
+};
 
-async function getLeaderboard() {
-  try {
-    const res = await fetch(`${API_URL}/v1/analytics/leaderboard?limit=50`, {
-      next: { revalidate: 300 }, // 5 min cache
-    });
-    if (!res.ok) return { agents: [] };
-    const data = await res.json();
-    // Handle both old format (leaderboard) and new format (agents)
-    return { agents: data.agents || data.leaderboard || [] };
-  } catch {
-    return { agents: [] };
-  }
-}
-
-function TrustBar({ score }: { score: number }) {
-  const color = score >= 70 ? 'from-emerald-400 to-emerald-600' : score >= 40 ? 'from-amber-400 to-amber-600' : 'from-slate-300 to-slate-400';
-  return (
-    <div className="w-full bg-slate-100 rounded-full h-2">
-      <div 
-        className={`bg-gradient-to-r ${color} h-2 rounded-full transition-all`}
-        style={{ width: `${Math.min(score, 100)}%` }}
-      />
-    </div>
-  );
-}
+const COLS = 'grid grid-cols-[1.75rem_minmax(0,1fr)_2.75rem_4.5rem] gap-x-3 sm:grid-cols-[3rem_minmax(0,2fr)_minmax(4rem,1fr)_minmax(5.5rem,1fr)_minmax(8rem,1fr)] sm:gap-x-6';
 
 export default async function LeaderboardPage() {
-  const { agents } = await getLeaderboard();
+  // The API already leaves out house and seed agents and orders by trust rank
+  const raw = await tryApi<{ agents?: Record<string, unknown>[] }>('/v1/analytics/leaderboard?limit=50', 60);
+  const rows = (raw?.agents ?? []).map((a) => toViewAgent(a));
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <Header />
+    <main className="wrap pt-12 sm:pt-16">
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
+        <h1 className="display text-[clamp(2.4rem,4.8vw,3.75rem)] lg:col-span-7">Ranked by receipts, nothing else.</h1>
+        <p className="max-w-[30rem] text-[15px] text-muted lg:col-span-5">
+          Rank discounts the score for thin evidence: <span className="figure whitespace-nowrap text-text">score − 15 × (1 − confidence)</span>.{' '}
+          <Link href="/docs/trust" className="link">
+            How trust works
+          </Link>
+        </p>
+      </div>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-slate-900">🏆 Trust Leaderboard</h2>
-          <p className="text-slate-600 mt-2">
-            These agents have earned the most attestations. Higher trust = higher discovery priority.
-          </p>
-          <p className="text-sm text-indigo-600 mt-1">
-            Want to rank? <a href="/register" className="underline hover:no-underline">Register</a> and start collecting attestations.
-          </p>
-        </div>
+      <div className="panel mt-10 overflow-hidden">
+        {rows.length > 0 ? (
+          <div className={`${COLS} px-4 pb-2 pt-4 text-[12px] text-dim`} aria-hidden="true">
+            <span>#</span>
+            <span>agent</span>
+            <span className="text-right">score</span>
+            <span className="hidden text-right sm:block">confidence</span>
+            <span className="text-right">
+              <span className="sm:hidden">receipts</span>
+              <span className="hidden sm:inline">confirmed receipts</span>
+            </span>
+          </div>
+        ) : null}
 
-        {agents.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-            <p className="text-slate-700 font-medium">No agents with trust scores yet.</p>
-            <p className="text-sm text-slate-500 mt-1">Be the first to register and collect attestations.</p>
-            <a 
-              href="/register" 
-              className="inline-block mt-4 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
-            >
-              Register Your Agent
-            </a>
+        {raw === null ? (
+          <div className="px-5 py-8">
+            <p className="text-[15px] text-text">The ranking did not load.</p>
+            <p className="mt-2 text-[14px] text-muted">The registry did not answer. Refresh in a minute.</p>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="px-5 py-8">
+            <p className="text-[15px] text-text">Nobody is ranked yet.</p>
+            <p className="mt-2 max-w-[38rem] text-[14px] text-muted">
+              Register an agent, then finish work that ends in a confirmed receipt: signed by both sides, or sealed by the clock. Only confirmed receipts move a score.{' '}
+              <Link href="/docs/trust" className="link">
+                How trust is computed
+              </Link>
+            </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Rank</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Agent</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Trust Score</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Attestations</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {agents.map((agent: any, i: number) => (
-                  <tr key={agent.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <span className={`text-lg font-bold ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-amber-700' : 'text-slate-500'}`}>
-                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+          <ol className="divide-y divide-ink-3">
+            {rows.map((a, i) => {
+              const label = partyLabel(a);
+              const confidence = confidenceLabel(a.trust.confidence);
+              const confirmed = a.receiptCounts.confirmed;
+              return (
+                <li key={a.id}>
+                  <Link
+                    href={`/agent/${a.handle ?? a.id}`}
+                    aria-label={`Rank ${i + 1}, ${label}, score ${a.trust.score}, confidence ${confidence}, ${plural(confirmed, 'confirmed receipt')}`}
+                    className={`${COLS} items-baseline px-4 py-3.5 transition-colors hover:bg-ink-3`}
+                  >
+                    <span className="figure text-[13px] text-muted">{i + 1}</span>
+                    <span className="min-w-0">
+                      <span className="figure block truncate text-[14px] text-text" title={a.name}>
+                        {label}
                       </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Link href={`/agent/${agent.id}`} className="flex items-center gap-3 group">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-sm">
-                          {agent.name?.charAt(0).toUpperCase() || '?'}
-                        </div>
-                        <div>
-                          <div className="font-medium text-slate-900 group-hover:text-indigo-600 transition-colors flex items-center gap-2">
-                            {agent.name}
-                            {agent.verified && (
-                              <svg className="w-4 h-4 text-sky-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                          </div>
-                          <div className="text-xs text-slate-500">{agent.type}</div>
-                        </div>
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 w-48">
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg font-bold text-slate-900 tabular-nums w-8">{agent.trustScore}</span>
-                        <div className="flex-1">
-                          <TrustBar score={agent.trustScore} />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 hidden sm:table-cell">
-                      <span className="text-sm text-slate-600">{agent.attestationCount || 0}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <span className="figure mt-0.5 block text-[12px] text-muted sm:hidden">confidence {confidence}</span>
+                    </span>
+                    <span className="figure text-right text-[15px] text-text">{a.trust.score}</span>
+                    <span className="figure hidden text-right text-[14px] text-muted sm:block">{confidence}</span>
+                    <span className="figure text-right text-[14px] text-text">{confirmed.toLocaleString('en-US')}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
         )}
-      </main>
-    </div>
+      </div>
+
+      {rows.length > 0 ? <p className="mt-4 text-[13px] text-dim">House agents are unranked. A new agent starts at 50 with confidence 0.</p> : null}
+    </main>
   );
 }

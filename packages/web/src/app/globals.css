@@ -1,50 +1,447 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * ANS design tokens (docs/DESIGN-SYSTEM.md).
+ * The default Tailwind palette, font stacks and radii are removed on purpose:
+ * a class like bg-indigo-600 generates nothing, so off-system colour cannot ship.
+ */
+@theme {
+  --color-*: initial;
+  --color-ink: #0d1a12;
+  --color-ink-2: #12211a;
+  --color-ink-3: #182b21;
+  --color-floor: #09130d;
+  --color-text: #eef1ea;
+  --color-muted: #8fa596;
+  --color-dim: #758f7e;
+  --color-line: rgb(238 241 234 / 0.1);
+  --color-line-strong: rgb(238 241 234 / 0.18);
+  --color-paper: #f6f3ec;
+  --color-paper-2: #e6e1d4;
+  --color-paper-ink: #1a2419;
+  --color-paper-muted: #5b6a5e;
+  --color-ok: #9fd3a8;
+  --color-wait: #d9c38a;
+  --color-bad: #d39a94;
+  --color-sandbox: #c9c3ad;
+  --color-paper-ok: #2e6a3c;
+  --color-paper-wait: #7a5d12;
+  --color-paper-bad: #8e3b33;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-*: initial;
+  --font-display: var(--font-gambarino), Georgia, "Times New Roman", serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --radius-*: initial;
+  --radius-none: 0;
+  --radius-sm: 2px;
+
+  --shadow-*: initial;
+  --drop-shadow-*: initial;
+  --inset-shadow-*: initial;
+
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+
+  --ease-print: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  color-scheme: dark;
+  --content: 70rem; /* 1120px */
+  --gutter: 1.5rem;
+  --tooth: 12px;
+  --tooth-depth: 6px;
+}
+
+@media (max-width: 40rem) {
+  :root {
+    --gutter: 1rem;
+  }
+}
+
+/* base (Tailwind emits these unlayered: never repeat a property here that a utility sets on the same element) */
+html {
+  background-color: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-ink);
+  /* Film grain on the substrate only: it sits behind every piece of content */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.95 0 0 0 0 0.92 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* Global Form Styles */
-input[type="text"],
-input[type="email"],
-input[type="url"],
-input[type="password"],
-input[type="number"],
-input[type="tel"],
-textarea,
-select {
-  color: #1e293b !important; /* slate-800 */
+/* Short pages still put the footer floor on the bottom edge */
+#main {
+  flex: 1 0 auto;
 }
 
-input::placeholder,
-textarea::placeholder {
-  color: #64748b !important; /* slate-500 */
+::selection {
+  background: var(--color-paper);
+  color: var(--color-paper-ink);
 }
 
-select option {
-  color: #1e293b; /* slate-800 */
-  background: white;
+:focus-visible {
+  outline: 2px solid var(--color-paper-2);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
-/* Custom select arrow styling */
-select {
+
+
+/* components */
+/* Content column shared by every page, header and footer */
+.wrap {
+  width: 100%;
+  max-width: calc(var(--content) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* Display type: Gambarino carries headlines only */
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+.figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* Inline text link: tonal shift, never an animated underline */
+.link {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-color: var(--color-line-strong);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color 160ms ease, color 160ms ease;
+}
+.link:hover {
+  text-decoration-color: var(--color-text);
+}
+
+/* ---------------------------------------------------------------------------
+ * Paper: the receipt material. Used for receipts, tickets and stubs only.
+ * ------------------------------------------------------------------------- */
+
+.paper {
+  position: relative;
+  background-color: var(--color-paper);
+  color: var(--color-paper-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  /* a rake of light from above: the sheet is a touch brighter at the top */
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 38%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.33 0 0 0 0 0.28 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23p)'/%3E%3C/svg%3E");
+}
+
+/* Contact shadow for paper lying on the counter: tight, from above, never a bloom */
+.paper-shadow {
+  filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.55)) drop-shadow(0 5px 6px rgb(0 0 0 / 0.22));
+}
+
+/* Torn bottom edge: constant-size teeth at any width; content must clear --tooth-depth */
+.torn-b {
+  -webkit-mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth-depth)) no-repeat,
+    conic-gradient(from -45deg at bottom, #000 90deg, #0000 0) bottom / var(--tooth) var(--tooth-depth) repeat-x;
+  mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth-depth)) no-repeat,
+    conic-gradient(from -45deg at bottom, #000 90deg, #0000 0) bottom / var(--tooth) var(--tooth-depth) repeat-x;
+}
+
+/* Torn right edge for ledger strips */
+.torn-r {
+  -webkit-mask:
+    linear-gradient(#000 0 0) left / calc(100% - var(--tooth-depth)) 100% no-repeat,
+    conic-gradient(from 225deg at right, #000 90deg, #0000 0) right / var(--tooth-depth) var(--tooth) repeat-y;
+  mask:
+    linear-gradient(#000 0 0) left / calc(100% - var(--tooth-depth)) 100% no-repeat,
+    conic-gradient(from 225deg at right, #000 90deg, #0000 0) right / var(--tooth-depth) var(--tooth) repeat-y;
+}
+
+/* Dashed rule on paper: a printed separator, not a hairline */
+.rule-dash {
+  height: 0;
+  border: 0;
+  border-top: 1px dashed rgb(26 36 25 / 0.35);
+  margin: 10px 0;
+}
+
+.paper-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  min-width: 0;
+}
+.paper-row > :first-child {
+  color: var(--color-paper-muted);
+  flex: none;
+}
+.paper-row > :last-child {
+  min-width: 0;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-head {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+ * Panels on ink: defined by tone and a self-coloured edge, not a bright line
+ * ------------------------------------------------------------------------- */
+
+.panel {
+  background-color: var(--color-ink-2);
+  border: 1px solid rgb(24 43 33 / 0.9);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgb(238 241 234 / 0.04);
+}
+
+/* Form controls */
+.field {
+  width: 100%;
+  background-color: var(--color-floor);
+  color: var(--color-text);
+  border: 1px solid var(--color-ink-3);
+  border-radius: 2px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.field::placeholder {
+  color: var(--color-dim);
+}
+.field:hover {
+  border-color: var(--color-line-strong);
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-paper-2);
+}
+textarea.field {
+  resize: vertical;
+  min-height: 96px;
+}
+select.field {
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22%2364748b%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E");
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%238fa596' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  padding-right: 2.5rem;
+  background-position: right 12px center;
 }
+
+/* ---------------------------------------------------------------------------
+ * Ticket rail (home)
+ * ------------------------------------------------------------------------- */
+
+.rail-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-3) transparent;
+  overscroll-behavior-x: contain;
+}
+/* Single-line values that scroll sideways without a scrollbar drawn under the text */
+.scroll-quiet {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-quiet::-webkit-scrollbar {
+  display: none;
+}
+.rail-bar {
+  height: 8px;
+  border-radius: 2px;
+  background-color: #1f3529;
+  box-shadow:
+    inset 0 1px 0 rgb(238 241 234 / 0.14),
+    inset 0 -1px 0 rgb(0 0 0 / 0.4);
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Long-form docs rendered from markdown
+ * ------------------------------------------------------------------------- */
+
+.prose-ans {
+  max-width: 44rem;
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 1.7;
+}
+.prose-ans h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(2.25rem, 4vw, 3rem);
+  line-height: 1.05;
+  margin: 0 0 1.5rem;
+}
+.prose-ans h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.75rem;
+  line-height: 1.15;
+  margin: 3rem 0 1rem;
+}
+.prose-ans h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 2rem 0 0.5rem;
+}
+.prose-ans p,
+.prose-ans ul,
+.prose-ans ol {
+  margin: 0 0 1rem;
+  color: #d5dcd3;
+}
+.prose-ans ul,
+.prose-ans ol {
+  padding-left: 1.25rem;
+}
+.prose-ans li {
+  margin: 0.25rem 0;
+}
+.prose-ans a {
+  text-decoration: underline;
+  text-decoration-color: var(--color-line-strong);
+  text-underline-offset: 3px;
+}
+.prose-ans code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--color-ink-3);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+.prose-ans pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--color-floor);
+  border: 1px solid var(--color-line);
+  border-radius: 2px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  margin: 0 0 1.25rem;
+}
+.prose-ans pre code {
+  background: none;
+  padding: 0;
+}
+.prose-ans table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 0 0 1.5rem;
+  display: block;
+  overflow-x: auto;
+}
+.prose-ans th,
+.prose-ans td {
+  text-align: left;
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: top;
+}
+.prose-ans th {
+  color: var(--color-muted);
+  font-weight: 500;
+}
+.prose-ans blockquote {
+  margin: 0 0 1rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--color-ink-3);
+  color: var(--color-muted);
+}
+.prose-ans hr {
+  border: 0;
+  border-top: 1px dashed var(--color-line-strong);
+  margin: 2.5rem 0;
+}
+
+@keyframes ans-swing {
+  0% { transform: rotate(0deg); }
+  22% { transform: rotate(1.6deg); }
+  48% { transform: rotate(-1.1deg); }
+  72% { transform: rotate(0.5deg); }
+  100% { transform: rotate(0deg); }
+}
+.ticket-swing {
+  transform-origin: 50% 0;
+}
+@media (hover: hover) {
+  .ticket-swing:hover {
+    animation: ans-swing 900ms var(--ease-print);
+  }
+}
+
+/* A receipt printing: transform only, no fill-mode, so an animation that never runs
+   leaves the receipt exactly where it belongs and fully visible */
+@keyframes ans-print {
+  from { transform: translateY(-14px); }
+  to { transform: translateY(0); }
+}
+.print-in {
+  animation: ans-print 520ms var(--ease-print);
+}
+
+@keyframes ans-slide {
+  from { transform: translateX(-18px); }
+  to { transform: translateX(0); }
+}
+.slide-in {
+  animation: ans-slide 420ms var(--ease-print);
+}
+
+@keyframes ans-drop {
+  from { transform: translateY(-8px); }
+  to { transform: translateY(0); }
+}
+.drop-in {
+  animation: ans-drop 360ms var(--ease-print);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

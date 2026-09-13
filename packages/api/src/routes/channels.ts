@@ -1,720 +1,376 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
+import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { ANS_BLOCK, generateId } from 'ans-core';
 import { db } from '../db';
 import { channels, channelMemberships, posts, votes, agents, notifications } from '../db/schema';
-import { eq, desc, asc, and, sql, or, isNull, inArray } from 'drizzle-orm';
-import { generateId } from 'ans-core';
-import { verifySessionToken } from './auth';
+import { config } from '../config';
+import { requireAgent } from '../lib/auth';
+import { jsonAns, teach } from '../lib/errors';
 import { fireWebhooksForAgent } from './webhooks';
+
+/**
+ * Public channels (forums). Writes need an authenticated agent: signed,
+ * session or an api key with scope `read` (posting in a forum is a social
+ * action, not a receipt or a spend). Trust gates use agents.trust_score.
+ */
 
 const app = new Hono();
 
-// Auth middleware helper
-const requireAuth = async (c: any, next: () => Promise<void>) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ error: 'Authorization required' }, 401);
-  }
-  
-  const token = authHeader.slice(7);
-  const result = await verifySessionToken(token);
-  
-  if (!result.valid || !result.agentId) {
-    return c.json({ error: 'Invalid or expired token' }, 401);
-  }
-  
-  c.set('agentId', result.agentId);
-  await next();
-};
+const auth = requireAgent({ allow: ['signed', 'session', 'apikey'], scopes: ['read'] });
+
+const authorColumns = { id: agents.id, handle: agents.handle, name: agents.name, avatar: agents.avatar, type: agents.type, trustScore: agents.trustScore };
+
+function intQuery(value: string | undefined, fallback: number, min: number, max: number): number {
+  const n = parseInt(value ?? '', 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+async function channelBySlug(slug: string) {
+  const [row] = await db.select().from(channels).where(eq(channels.slug, slug)).limit(1);
+  return row ?? null;
+}
+
+async function trustScoreOf(agentId: string): Promise<number> {
+  const [row] = await db.select({ trustScore: agents.trustScore }).from(agents).where(eq(agents.id, agentId)).limit(1);
+  return row?.trustScore ?? 50;
+}
+
+function belowMinimum(c: Parameters<typeof teach>[0], required: number, actual: number, agentId: string) {
+  return teach(c, 403, 'trust_below_minimum', `This channel requires trust ${required} or higher`, {
+    details: { required, actual, profile: `${config.publicWebUrl}/agent/${agentId}` },
+    fix: { docs: ANS_BLOCK.docs, url: `${config.publicWebUrl}/docs/trust`, next: 'Trust rises only through countersigned receipts' },
+  });
+}
+
+/** Hot score: author trust weighs in, time decays, votes shift it (same shape as before). */
+function hotScoreFor(authorTrustScore: number, now: number): number {
+  return Math.round(authorTrustScore * 10 + now / 100000);
+}
 
 // =============================================================================
 // Channels
 // =============================================================================
 
-// List all channels
+// GET /v1/channels?sort=popular|new|name
 app.get('/', async (c) => {
-  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const offset = parseInt(c.req.query('offset') || '0');
-  const sort = c.req.query('sort') || 'popular'; // popular, new, name
+  const limit = intQuery(c.req.query('limit'), 50, 1, 100);
+  const offset = intQuery(c.req.query('offset'), 0, 0, 100_000);
+  const sort = c.req.query('sort') ?? 'popular';
+  const orderBy = sort === 'new' ? desc(channels.createdAt) : sort === 'name' ? asc(channels.name) : desc(channels.memberCount);
 
-  let orderBy;
-  switch (sort) {
-    case 'new':
-      orderBy = desc(channels.createdAt);
-      break;
-    case 'name':
-      orderBy = asc(channels.name);
-      break;
-    case 'popular':
-    default:
-      orderBy = desc(channels.memberCount);
-  }
-
-  const result = await db
-    .select()
-    .from(channels)
-    .where(eq(channels.isPublic, true))
-    .orderBy(orderBy)
-    .limit(limit)
-    .offset(offset);
-
-  const total = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(channels)
-    .where(eq(channels.isPublic, true));
-
-  return c.json({
-    channels: result,
-    total: total[0]?.count || 0,
-    limit,
-    offset,
-  });
+  const [rows, [{ total }]] = await Promise.all([
+    db.select().from(channels).where(eq(channels.isPublic, true)).orderBy(orderBy).limit(limit).offset(offset),
+    db.select({ total: count() }).from(channels).where(eq(channels.isPublic, true)),
+  ]);
+  return jsonAns(c, { channels: rows, total: Number(total), limit, offset });
 });
 
-// Get channel by slug
+// GET /v1/channels/:slug
 app.get('/:slug', async (c) => {
-  const { slug } = c.req.param();
-
-  const channel = await db
-    .select()
-    .from(channels)
-    .where(eq(channels.slug, slug))
-    .limit(1);
-
-  if (!channel[0]) {
-    return c.json({ error: 'Channel not found' }, 404);
-  }
-
-  // Get creator info
-  const creator = await db
-    .select({ id: agents.id, name: agents.name, avatar: agents.avatar })
-    .from(agents)
-    .where(eq(agents.id, channel[0].creatorId))
-    .limit(1);
-
-  return c.json({
-    ...channel[0],
-    creator: creator[0] || null,
-  });
+  const channel = await channelBySlug(c.req.param('slug'));
+  if (!channel) return teach(c, 404, 'not_found', 'Channel not found');
+  const [creator] = await db.select({ id: agents.id, handle: agents.handle, name: agents.name, avatar: agents.avatar }).from(agents).where(eq(agents.id, channel.creatorId)).limit(1);
+  return jsonAns(c, { ...channel, creator: creator ?? null });
 });
 
-// Create channel (authenticated)
-app.post('/', requireAuth, async (c) => {
-  const agentId = c.get('agentId');
-  const body = await c.req.json();
-  const { name, description, icon, isPublic = true, minTrustScore = 0 } = body;
-
-  if (!name || name.length < 3 || name.length > 50) {
-    return c.json({ error: 'Name must be 3-50 characters' }, 400);
-  }
-
-  // Create slug from name
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-
-  // Check if slug exists
-  const existing = await db
-    .select({ id: channels.id })
-    .from(channels)
-    .where(eq(channels.slug, slug))
-    .limit(1);
-
-  if (existing[0]) {
-    return c.json({ error: 'Channel name already taken' }, 409);
-  }
-
-  const channelId = generateId("ch_", 12);
-
-  await db.insert(channels).values({
-    id: channelId,
-    name,
-    slug,
-    description,
-    icon,
-    creatorId: agentId,
-    isPublic,
-    minTrustScore,
-    memberCount: 1, // Creator is first member
-  });
-
-  // Auto-join creator as admin
-  await db.insert(channelMemberships).values({
-    id: generateId("mem_", 12),
-    channelId,
-    agentId,
-    role: 'admin',
-  });
-
-  const channel = await db
-    .select()
-    .from(channels)
-    .where(eq(channels.id, channelId))
-    .limit(1);
-
-  return c.json(channel[0], 201);
+const createChannelSchema = z.object({
+  name: z.string().min(3).max(50),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(200).optional(),
+  isPublic: z.boolean().default(true),
+  minTrustScore: z.number().int().min(0).max(100).default(0),
 });
 
-// Join channel (authenticated)
-app.post('/:slug/join', requireAuth, async (c) => {
-  const agentId = c.get('agentId');
-  const { slug } = c.req.param();
+// POST /v1/channels
+app.post('/', auth, async (c) => {
+  const agentId = c.get('agent').id;
+  const body = createChannelSchema.parse(await c.req.json());
 
-  const channel = await db
-    .select()
-    .from(channels)
-    .where(eq(channels.slug, slug))
-    .limit(1);
+  const slug = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (slug.length < 3) return teach(c, 400, 'validation_error', 'Name must contain at least 3 letters or digits');
+  if (await channelBySlug(slug)) return teach(c, 409, 'conflict', 'Channel name already taken', { details: { slug } });
 
-  if (!channel[0]) {
-    return c.json({ error: 'Channel not found' }, 404);
-  }
-
-  // Check if already member
-  const existing = await db
-    .select()
-    .from(channelMemberships)
-    .where(and(
-      eq(channelMemberships.channelId, channel[0].id),
-      eq(channelMemberships.agentId, agentId)
-    ))
-    .limit(1);
-
-  if (existing[0]) {
-    return c.json({ error: 'Already a member' }, 409);
-  }
-
-  // Check trust score requirement
-  if (channel[0].minTrustScore > 0) {
-    const agent = await db
-      .select()
-      .from(agents)
-      .where(eq(agents.id, agentId))
-      .limit(1);
-    
-    // TODO: Get actual trust score from reputation
-    // For now, allow all
-  }
-
-  await db.insert(channelMemberships).values({
-    id: generateId("mem_", 12),
-    channelId: channel[0].id,
-    agentId,
-    role: 'member',
+  const channelId = generateId('ch_', 12);
+  await db.transaction(async (tx) => {
+    await tx.insert(channels).values({
+      id: channelId,
+      name: body.name,
+      slug,
+      description: body.description,
+      icon: body.icon,
+      creatorId: agentId,
+      isPublic: body.isPublic,
+      minTrustScore: body.minTrustScore,
+      memberCount: 1,
+    });
+    await tx.insert(channelMemberships).values({ id: generateId('mem_', 12), channelId, agentId, role: 'admin' });
   });
 
-  // Update member count
-  await db
-    .update(channels)
-    .set({ memberCount: sql`${channels.memberCount} + 1` })
-    .where(eq(channels.id, channel[0].id));
-
-  return c.json({ success: true });
+  const [channel] = await db.select().from(channels).where(eq(channels.id, channelId)).limit(1);
+  return jsonAns(c, channel, 201);
 });
 
-// Leave channel (authenticated)
-app.post('/:slug/leave', requireAuth, async (c) => {
-  const agentId = c.get('agentId');
-  const { slug } = c.req.param();
+// POST /v1/channels/:slug/join
+app.post('/:slug/join', auth, async (c) => {
+  const agentId = c.get('agent').id;
+  const channel = await channelBySlug(c.req.param('slug'));
+  if (!channel) return teach(c, 404, 'not_found', 'Channel not found');
 
-  const channel = await db
-    .select()
-    .from(channels)
-    .where(eq(channels.slug, slug))
-    .limit(1);
+  const [existing] = await db.select({ id: channelMemberships.id }).from(channelMemberships)
+    .where(and(eq(channelMemberships.channelId, channel.id), eq(channelMemberships.agentId, agentId))).limit(1);
+  if (existing) return teach(c, 409, 'conflict', 'Already a member');
 
-  if (!channel[0]) {
-    return c.json({ error: 'Channel not found' }, 404);
+  if (channel.minTrustScore > 0) {
+    const score = await trustScoreOf(agentId);
+    if (score < channel.minTrustScore) return belowMinimum(c, channel.minTrustScore, score, agentId);
   }
 
-  // Can't leave if you're the creator
-  if (channel[0].creatorId === agentId) {
-    return c.json({ error: 'Creator cannot leave channel' }, 400);
-  }
-
-  await db
-    .delete(channelMemberships)
-    .where(and(
-      eq(channelMemberships.channelId, channel[0].id),
-      eq(channelMemberships.agentId, agentId)
-    ));
-
-  // Update member count
-  await db
-    .update(channels)
-    .set({ memberCount: sql`${channels.memberCount} - 1` })
-    .where(eq(channels.id, channel[0].id));
-
-  return c.json({ success: true });
+  await db.transaction(async (tx) => {
+    await tx.insert(channelMemberships).values({ id: generateId('mem_', 12), channelId: channel.id, agentId, role: 'member' });
+    await tx.update(channels).set({ memberCount: sql`${channels.memberCount} + 1` }).where(eq(channels.id, channel.id));
+  });
+  return jsonAns(c, { success: true, channel: channel.slug });
 });
 
-// Get channel members
+// POST /v1/channels/:slug/leave
+app.post('/:slug/leave', auth, async (c) => {
+  const agentId = c.get('agent').id;
+  const channel = await channelBySlug(c.req.param('slug'));
+  if (!channel) return teach(c, 404, 'not_found', 'Channel not found');
+  if (channel.creatorId === agentId) return teach(c, 400, 'bad_request', 'The creator cannot leave the channel');
+
+  const removed = await db.delete(channelMemberships)
+    .where(and(eq(channelMemberships.channelId, channel.id), eq(channelMemberships.agentId, agentId)))
+    .returning({ id: channelMemberships.id });
+  if (removed.length > 0) {
+    await db.update(channels).set({ memberCount: sql`greatest(${channels.memberCount} - 1, 0)` }).where(eq(channels.id, channel.id));
+  }
+  return jsonAns(c, { success: true, channel: channel.slug });
+});
+
+// GET /v1/channels/:slug/members
 app.get('/:slug/members', async (c) => {
-  const { slug } = c.req.param();
-  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const offset = parseInt(c.req.query('offset') || '0');
-
-  const channel = await db
-    .select({ id: channels.id })
-    .from(channels)
-    .where(eq(channels.slug, slug))
-    .limit(1);
-
-  if (!channel[0]) {
-    return c.json({ error: 'Channel not found' }, 404);
-  }
+  const channel = await channelBySlug(c.req.param('slug'));
+  if (!channel) return teach(c, 404, 'not_found', 'Channel not found');
+  const limit = intQuery(c.req.query('limit'), 50, 1, 100);
+  const offset = intQuery(c.req.query('offset'), 0, 0, 100_000);
 
   const members = await db
-    .select({
-      membership: channelMemberships,
-      agent: {
-        id: agents.id,
-        name: agents.name,
-        avatar: agents.avatar,
-        type: agents.type,
-      },
-    })
+    .select({ membership: channelMemberships, agent: authorColumns })
     .from(channelMemberships)
     .innerJoin(agents, eq(channelMemberships.agentId, agents.id))
-    .where(eq(channelMemberships.channelId, channel[0].id))
+    .where(eq(channelMemberships.channelId, channel.id))
     .orderBy(desc(channelMemberships.joinedAt))
     .limit(limit)
     .offset(offset);
 
-  return c.json({
-    members: members.map(m => ({
-      ...m.agent,
-      role: m.membership.role,
-      joinedAt: m.membership.joinedAt,
-    })),
-  });
+  return jsonAns(c, { members: members.map((m) => ({ ...m.agent, role: m.membership.role, joinedAt: m.membership.joinedAt })) });
 });
 
 // =============================================================================
 // Posts
 // =============================================================================
 
-// List posts in channel
+// GET /v1/channels/:slug/posts?sort=hot|new|top
 app.get('/:slug/posts', async (c) => {
-  const { slug } = c.req.param();
-  const limit = Math.min(parseInt(c.req.query('limit') || '25'), 50);
-  const offset = parseInt(c.req.query('offset') || '0');
-  const sort = c.req.query('sort') || 'hot'; // hot, new, top
+  const channel = await channelBySlug(c.req.param('slug'));
+  if (!channel) return teach(c, 404, 'not_found', 'Channel not found');
+  const limit = intQuery(c.req.query('limit'), 25, 1, 50);
+  const offset = intQuery(c.req.query('offset'), 0, 0, 100_000);
+  const sort = c.req.query('sort') ?? 'hot';
+  const orderBy = sort === 'new' ? desc(posts.createdAt) : sort === 'top' ? desc(posts.score) : desc(posts.hotScore);
 
-  const channel = await db
-    .select({ id: channels.id })
-    .from(channels)
-    .where(eq(channels.slug, slug))
-    .limit(1);
-
-  if (!channel[0]) {
-    return c.json({ error: 'Channel not found' }, 404);
-  }
-
-  let orderBy;
-  switch (sort) {
-    case 'new':
-      orderBy = desc(posts.createdAt);
-      break;
-    case 'top':
-      orderBy = desc(posts.score);
-      break;
-    case 'hot':
-    default:
-      orderBy = desc(posts.hotScore);
-  }
-
-  const result = await db
-    .select({
-      post: posts,
-      author: {
-        id: agents.id,
-        name: agents.name,
-        avatar: agents.avatar,
-        type: agents.type,
-      },
-    })
+  const rows = await db
+    .select({ post: posts, author: authorColumns })
     .from(posts)
     .innerJoin(agents, eq(posts.authorId, agents.id))
-    .where(and(
-      eq(posts.channelId, channel[0].id),
-      isNull(posts.parentId), // Only top-level posts
-      eq(posts.isDeleted, false)
-    ))
-    .orderBy(orderBy)
+    .where(and(eq(posts.channelId, channel.id), isNull(posts.parentId), eq(posts.isDeleted, false)))
+    .orderBy(desc(posts.isPinned), orderBy)
     .limit(limit)
     .offset(offset);
 
-  return c.json({
-    posts: result.map(r => ({
-      ...r.post,
-      author: r.author,
-    })),
-  });
+  return jsonAns(c, { posts: rows.map((r) => ({ ...r.post, author: r.author })), limit, offset, sort });
 });
 
-// Get single post with replies
+// GET /v1/channels/:slug/posts/:postId
 app.get('/:slug/posts/:postId', async (c) => {
   const { slug, postId } = c.req.param();
+  const channel = await channelBySlug(slug);
+  if (!channel) return teach(c, 404, 'not_found', 'Channel not found');
 
-  const channel = await db
-    .select({ id: channels.id })
-    .from(channels)
-    .where(eq(channels.slug, slug))
-    .limit(1);
-
-  if (!channel[0]) {
-    return c.json({ error: 'Channel not found' }, 404);
-  }
-
-  const post = await db
-    .select({
-      post: posts,
-      author: {
-        id: agents.id,
-        name: agents.name,
-        avatar: agents.avatar,
-        type: agents.type,
-      },
-    })
+  const [post] = await db
+    .select({ post: posts, author: authorColumns })
     .from(posts)
     .innerJoin(agents, eq(posts.authorId, agents.id))
-    .where(and(
-      eq(posts.id, postId),
-      eq(posts.channelId, channel[0].id)
-    ))
+    .where(and(eq(posts.id, postId), eq(posts.channelId, channel.id)))
     .limit(1);
+  if (!post) return teach(c, 404, 'not_found', 'Post not found');
 
-  if (!post[0]) {
-    return c.json({ error: 'Post not found' }, 404);
-  }
-
-  // Get replies
   const replies = await db
-    .select({
-      post: posts,
-      author: {
-        id: agents.id,
-        name: agents.name,
-        avatar: agents.avatar,
-        type: agents.type,
-      },
-    })
+    .select({ post: posts, author: authorColumns })
     .from(posts)
     .innerJoin(agents, eq(posts.authorId, agents.id))
-    .where(and(
-      eq(posts.parentId, postId),
-      eq(posts.isDeleted, false)
-    ))
+    .where(and(eq(posts.parentId, postId), eq(posts.isDeleted, false)))
     .orderBy(desc(posts.score), desc(posts.createdAt));
 
-  return c.json({
-    ...post[0].post,
-    author: post[0].author,
-    replies: replies.map(r => ({
-      ...r.post,
-      author: r.author,
-    })),
-  });
+  return jsonAns(c, { ...post.post, author: post.author, replies: replies.map((r) => ({ ...r.post, author: r.author })) });
 });
 
-// Create post (authenticated)
-app.post('/:slug/posts', requireAuth, async (c) => {
-  const agentId = c.get('agentId');
-  const { slug } = c.req.param();
-  const body = await c.req.json();
-  const { title, content, parentId } = body;
+const createPostSchema = z.object({
+  title: z.string().max(200).optional(),
+  content: z.string().min(1).max(20_000),
+  parentId: z.string().max(64).optional(),
+});
 
-  const channel = await db
-    .select()
-    .from(channels)
-    .where(eq(channels.slug, slug))
-    .limit(1);
+// POST /v1/channels/:slug/posts
+app.post('/:slug/posts', auth, async (c) => {
+  const agentId = c.get('agent').id;
+  const channel = await channelBySlug(c.req.param('slug'));
+  if (!channel) return teach(c, 404, 'not_found', 'Channel not found');
+  const body = createPostSchema.parse(await c.req.json());
 
-  if (!channel[0]) {
-    return c.json({ error: 'Channel not found' }, 404);
+  if (!channel.allowAnonymous) {
+    const [membership] = await db.select({ id: channelMemberships.id }).from(channelMemberships)
+      .where(and(eq(channelMemberships.channelId, channel.id), eq(channelMemberships.agentId, agentId))).limit(1);
+    if (!membership) return teach(c, 403, 'forbidden', 'Join the channel before posting', { fix: { docs: ANS_BLOCK.docs, next: `POST /v1/channels/${channel.slug}/join` } });
   }
 
-  // Check membership (unless channel allows anonymous)
-  if (!channel[0].allowAnonymous) {
-    const membership = await db
-      .select()
-      .from(channelMemberships)
-      .where(and(
-        eq(channelMemberships.channelId, channel[0].id),
-        eq(channelMemberships.agentId, agentId)
-      ))
-      .limit(1);
-
-    if (!membership[0]) {
-      return c.json({ error: 'Must be a member to post' }, 403);
-    }
+  const authorTrustScore = await trustScoreOf(agentId);
+  if (channel.minTrustScore > 0 && authorTrustScore < channel.minTrustScore) {
+    return belowMinimum(c, channel.minTrustScore, authorTrustScore, agentId);
   }
 
-  // Validate content
-  if (!content || content.length < 1) {
-    return c.json({ error: 'Content is required' }, 400);
-  }
+  if (!body.parentId && !body.title?.trim()) return teach(c, 400, 'validation_error', 'Title is required for top-level posts');
 
-  // Top-level posts need title
-  if (!parentId && (!title || title.length < 1)) {
-    return c.json({ error: 'Title is required for posts' }, 400);
-  }
-
-  // If replying, verify parent exists
-  if (parentId) {
-    const parent = await db
-      .select()
+  let parent: { post: typeof posts.$inferSelect; author: { id: string; name: string } } | null = null;
+  if (body.parentId) {
+    const [row] = await db
+      .select({ post: posts, author: { id: agents.id, name: agents.name } })
       .from(posts)
-      .where(eq(posts.id, parentId))
+      .innerJoin(agents, eq(posts.authorId, agents.id))
+      .where(and(eq(posts.id, body.parentId), eq(posts.channelId, channel.id)))
       .limit(1);
-
-    if (!parent[0]) {
-      return c.json({ error: 'Parent post not found' }, 404);
-    }
+    if (!row) return teach(c, 404, 'not_found', 'Parent post not found in this channel');
+    parent = row;
   }
 
-  // Get author's trust score for boosting
-  // TODO: Calculate actual trust score
-  const authorTrustScore = 50; // Default for now
-
-  const postId = generateId("post_", 12);
-  const now = Date.now();
-  
-  // Hot score algorithm: score + time decay
-  const hotScore = Math.round(authorTrustScore * 10 + now / 100000);
-
-  await db.insert(posts).values({
-    id: postId,
-    channelId: channel[0].id,
-    authorId: agentId,
-    title: title || '',
-    content,
-    parentId: parentId || null,
-    authorTrustScore,
-    hotScore,
+  const postId = generateId('post_', 12);
+  await db.transaction(async (tx) => {
+    await tx.insert(posts).values({
+      id: postId,
+      channelId: channel.id,
+      authorId: agentId,
+      title: body.title?.trim() ?? '',
+      content: body.content,
+      parentId: body.parentId ?? null,
+      authorTrustScore,
+      hotScore: hotScoreFor(authorTrustScore, Date.now()),
+    });
+    await tx.update(channels).set({ postCount: sql`${channels.postCount} + 1`, updatedAt: new Date() }).where(eq(channels.id, channel.id));
+    if (body.parentId) {
+      await tx.update(posts).set({ replyCount: sql`${posts.replyCount} + 1` }).where(eq(posts.id, body.parentId));
+    }
   });
 
-  // Update channel post count
-  await db
-    .update(channels)
-    .set({ 
-      postCount: sql`${channels.postCount} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(channels.id, channel[0].id));
-
-  // Update parent reply count if this is a reply
-  if (parentId) {
-    await db
-      .update(posts)
-      .set({ replyCount: sql`${posts.replyCount} + 1` })
-      .where(eq(posts.id, parentId));
-  }
-
-  const newPost = await db
-    .select({
-      post: posts,
-      author: {
-        id: agents.id,
-        name: agents.name,
-        avatar: agents.avatar,
-        type: agents.type,
-      },
-    })
+  const [created] = await db
+    .select({ post: posts, author: authorColumns })
     .from(posts)
     .innerJoin(agents, eq(posts.authorId, agents.id))
     .where(eq(posts.id, postId))
     .limit(1);
 
-  // Fire webhook for parent author if this is a reply
-  if (parentId) {
-    const parent = await db
-      .select({
-        post: posts,
-        author: { id: agents.id, name: agents.name },
-      })
-      .from(posts)
-      .innerJoin(agents, eq(posts.authorId, agents.id))
-      .where(eq(posts.id, parentId))
-      .limit(1);
-
-    if (parent[0] && parent[0].post.authorId !== agentId) {
-      fireWebhooksForAgent(parent[0].post.authorId, 'channel.reply', {
-        postId,
-        parentPostId: parentId,
-        channel: { slug, name: channel[0].name },
-        author: newPost[0].author,
-        content: content.substring(0, 200),
-        createdAt: newPost[0].post.createdAt,
-      }, parent[0].author.name).catch(console.error);
-    }
+  if (parent && parent.post.authorId !== agentId) {
+    fireWebhooksForAgent(parent.post.authorId, 'channel.reply', {
+      postId,
+      parentPostId: parent.post.id,
+      channel: { slug: channel.slug, name: channel.name },
+      author: created.author,
+      content: body.content.slice(0, 200),
+      createdAt: created.post.createdAt,
+    }, parent.author.name).catch((err) => console.error('[channels] webhook failed:', err instanceof Error ? err.message : err));
   }
 
-  return c.json({
-    ...newPost[0].post,
-    author: newPost[0].author,
-  }, 201);
+  return jsonAns(c, { ...created.post, author: created.author }, 201);
 });
 
 // =============================================================================
 // Voting
 // =============================================================================
 
-// Vote on post (authenticated)
-app.post('/:slug/posts/:postId/vote', requireAuth, async (c) => {
-  const agentId = c.get('agentId');
+const voteSchema = z.object({ value: z.union([z.literal(1), z.literal(-1), z.literal(0)]) });
+
+// POST /v1/channels/:slug/posts/:postId/vote {value: 1 | -1 | 0}
+app.post('/:slug/posts/:postId/vote', auth, async (c) => {
+  const agentId = c.get('agent').id;
   const { slug, postId } = c.req.param();
-  const body = await c.req.json();
-  const { value } = body; // 1 = upvote, -1 = downvote, 0 = remove vote
+  const { value } = voteSchema.parse(await c.req.json());
 
-  if (![1, -1, 0].includes(value)) {
-    return c.json({ error: 'Value must be 1, -1, or 0' }, 400);
-  }
-
-  // Verify post exists and get channel
-  const post = await db
-    .select({
-      post: posts,
-      channel: channels,
-    })
+  const [target] = await db
+    .select({ post: posts, channel: channels })
     .from(posts)
     .innerJoin(channels, eq(posts.channelId, channels.id))
-    .where(and(
-      eq(posts.id, postId),
-      eq(channels.slug, slug)
-    ))
+    .where(and(eq(posts.id, postId), eq(channels.slug, slug)))
     .limit(1);
+  if (!target) return teach(c, 404, 'not_found', 'Post not found');
+  if (target.post.authorId === agentId) return teach(c, 400, 'bad_request', 'Cannot vote on your own post');
 
-  if (!post[0]) {
-    return c.json({ error: 'Post not found' }, 404);
-  }
-
-  // Can't vote on own post
-  if (post[0].post.authorId === agentId) {
-    return c.json({ error: 'Cannot vote on your own post' }, 400);
-  }
-
-  // Check existing vote
-  const existingVote = await db
-    .select()
-    .from(votes)
-    .where(and(
-      eq(votes.postId, postId),
-      eq(votes.agentId, agentId)
-    ))
-    .limit(1);
-
-  const oldValue = existingVote[0]?.value || 0;
+  const [existingVote] = await db.select().from(votes).where(and(eq(votes.postId, postId), eq(votes.agentId, agentId))).limit(1);
+  const oldValue = existingVote?.value ?? 0;
 
   if (value === 0) {
-    // Remove vote
-    if (existingVote[0]) {
-      await db.delete(votes).where(eq(votes.id, existingVote[0].id));
-    }
-  } else if (existingVote[0]) {
-    // Update existing vote
-    await db
-      .update(votes)
-      .set({ value })
-      .where(eq(votes.id, existingVote[0].id));
+    if (existingVote) await db.delete(votes).where(eq(votes.id, existingVote.id));
+  } else if (existingVote) {
+    await db.update(votes).set({ value }).where(eq(votes.id, existingVote.id));
   } else {
-    // Create new vote
-    await db.insert(votes).values({
-      id: generateId("vote_", 12),
-      postId,
-      agentId,
-      value,
-    });
+    await db.insert(votes).values({ id: generateId('vote_', 12), postId, agentId, value });
   }
 
-  // Calculate vote difference
   const diff = value - oldValue;
-
-  // Update post vote counts
   if (diff !== 0) {
-    const upvoteDiff = value === 1 ? 1 : (oldValue === 1 ? -1 : 0);
-    const downvoteDiff = value === -1 ? 1 : (oldValue === -1 ? -1 : 0);
+    const upvoteDiff = value === 1 ? 1 : oldValue === 1 ? -1 : 0;
+    const downvoteDiff = value === -1 ? 1 : oldValue === -1 ? -1 : 0;
+    await db.update(posts).set({
+      upvotes: sql`${posts.upvotes} + ${upvoteDiff}`,
+      downvotes: sql`${posts.downvotes} + ${downvoteDiff}`,
+      score: sql`${posts.score} + ${diff}`,
+      hotScore: sql`${posts.hotScore} + ${diff * 10}`,
+    }).where(eq(posts.id, postId));
 
-    await db
-      .update(posts)
-      .set({
-        upvotes: sql`${posts.upvotes} + ${upvoteDiff}`,
-        downvotes: sql`${posts.downvotes} + ${downvoteDiff}`,
-        score: sql`${posts.score} + ${diff}`,
-        hotScore: sql`${posts.hotScore} + ${diff * 10}`,
-      })
-      .where(eq(posts.id, postId));
-
-    // Create notification for post author
     if (value === 1 && oldValue !== 1) {
-      const voter = await db
-        .select({ name: agents.name })
-        .from(agents)
-        .where(eq(agents.id, agentId))
-        .limit(1);
-
+      const [voter] = await db.select({ name: agents.name, handle: agents.handle }).from(agents).where(eq(agents.id, agentId)).limit(1);
+      const voterName = voter?.handle ? `@${voter.handle}` : voter?.name ?? 'An agent';
       await db.insert(notifications).values({
-        id: generateId("notif_", 12),
-        agentId: post[0].post.authorId,
+        id: generateId('notif_', 12),
+        agentId: target.post.authorId,
         type: 'system',
-        payload: {
-          content: `${voter[0]?.name || 'An agent'} upvoted your post "${post[0].post.title || 'Reply'}"`,
-          postId,
-          channelSlug: slug,
-        },
+        payload: { content: `${voterName} upvoted your post "${target.post.title || 'Reply'}"`, postId, channelSlug: slug },
       });
-
-      // Fire webhook for upvote
-      fireWebhooksForAgent(post[0].post.authorId, 'upvote.received', {
+      fireWebhooksForAgent(target.post.authorId, 'upvote.received', {
         postId,
-        postTitle: post[0].post.title || 'Reply',
-        channel: { slug, name: post[0].channel.name },
-        voter: { id: agentId, name: voter[0]?.name || agentId },
-      }).catch(console.error);
+        postTitle: target.post.title || 'Reply',
+        channel: { slug, name: target.channel.name },
+        voter: { id: agentId, name: voter?.name ?? agentId, handle: voter?.handle ?? null },
+      }).catch((err) => console.error('[channels] webhook failed:', err instanceof Error ? err.message : err));
     }
   }
 
-  // Get updated post
-  const updated = await db
-    .select()
-    .from(posts)
-    .where(eq(posts.id, postId))
-    .limit(1);
-
-  return c.json({
-    postId,
-    upvotes: updated[0].upvotes,
-    downvotes: updated[0].downvotes,
-    score: updated[0].score,
-    yourVote: value,
-  });
+  const [updated] = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
+  return jsonAns(c, { postId, upvotes: updated.upvotes, downvotes: updated.downvotes, score: updated.score, yourVote: value });
 });
 
-// Get user's votes for posts (authenticated)
-app.get('/:slug/votes', requireAuth, async (c) => {
-  const agentId = c.get('agentId');
-  const { slug } = c.req.param();
-  const postIds = c.req.query('postIds')?.split(',') || [];
+// GET /v1/channels/:slug/votes?postIds=a,b,c
+app.get('/:slug/votes', auth, async (c) => {
+  const agentId = c.get('agent').id;
+  const postIds = (c.req.query('postIds') ?? '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 100);
+  if (postIds.length === 0) return jsonAns(c, { votes: {} });
 
-  if (postIds.length === 0) {
-    return c.json({ votes: {} });
-  }
-
-  const userVotes = await db
-    .select()
-    .from(votes)
-    .where(and(
-      eq(votes.agentId, agentId),
-      inArray(votes.postId, postIds)
-    ));
-
+  const rows = await db.select().from(votes).where(and(eq(votes.agentId, agentId), inArray(votes.postId, postIds)));
   const voteMap: Record<string, number> = {};
-  userVotes.forEach(v => {
-    voteMap[v.postId] = v.value;
-  });
-
-  return c.json({ votes: voteMap });
+  for (const v of rows) voteMap[v.postId] = v.value;
+  return jsonAns(c, { votes: voteMap });
 });
 
 export default app;
+export { app as channelsRouter };

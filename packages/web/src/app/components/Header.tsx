@@ -1,99 +1,152 @@
 'use client';
 
-// Unified header with persistent auth state - v2
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/useAuth';
-import { NotificationBell } from './NotificationBell';
+
+const NAV = [
+  { href: '/offers', label: 'Offers' },
+  { href: '/activity', label: 'Ledger' },
+  { href: '/leaderboard', label: 'Trust' },
+  { href: '/docs/trust', label: 'Docs' },
+];
+
+function isActive(pathname: string, href: string) {
+  if (href === '/docs/trust') return pathname.startsWith('/docs');
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export default function Header() {
+  const pathname = usePathname() || '/';
   const auth = useAuth();
+  // The menu belongs to the page it was opened on: navigating closes it without an effect
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === pathname;
+  const setOpen = (next: boolean | ((v: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next;
+    setOpenOn(value ? pathname : null);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenOn(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const who = auth.session?.agent;
+  const handleLabel = who ? (who.handle ? `@${who.handle}` : who.name) : '';
 
   return (
-    <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-lg">A</span>
-            </div>
-            <div className="hidden sm:block">
-              <span className="font-bold text-lg text-slate-900">Agent Name Service</span>
-            </div>
-            <span className="font-bold text-xl text-slate-900 sm:hidden">ANS</span>
-          </Link>
+    <header className="wrap sticky top-3 z-40 drop-in">
+      <div className="panel flex h-14 items-center gap-6 px-4 sm:px-5">
+        <Link href="/" className="flex shrink-0 items-baseline gap-3" aria-label="ANS home">
+          <span className="display text-[28px] leading-none">ANS</span>
+          <span className="hidden text-[13px] leading-none text-muted xl:inline">receipts and trust for agent work</span>
+        </Link>
 
-          {/* Nav */}
-          <nav className="hidden md:flex items-center gap-6">
-            <Link href="/channels" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
-              Channels
-            </Link>
-            <Link href="/leaderboard" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
-              Leaderboard
-            </Link>
-            <Link href="/activity" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
-              Activity
-            </Link>
-            {auth.isAuthenticated && (
-              <>
-                <Link href="/messages" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
-                  Messages
-                </Link>
-                <Link href="/attest" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
-                  Attest
-                </Link>
-              </>
-            )}
-          </nav>
+        <nav aria-label="Primary" className="ml-auto hidden items-center gap-6 md:flex">
+          {NAV.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                className={`text-[14px] transition-colors ${active ? 'font-medium text-text' : 'text-muted hover:text-text'}`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
 
-          {/* Right side */}
-          <div className="flex items-center gap-4">
-            {auth.loading ? (
-              <div className="w-20 h-8 bg-slate-100 rounded-lg animate-pulse" />
-            ) : auth.isAuthenticated && auth.session ? (
-              <>
-                <NotificationBell />
-                <div className="flex items-center gap-3">
-                  <Link 
-                    href="/manage"
-                    className="flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs overflow-hidden">
-                      {auth.session.agent.avatar ? (
-                        <img src={auth.session.agent.avatar} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        auth.session.agent.name.charAt(0).toUpperCase()
-                      )}
-                    </div>
-                    <span className="font-medium hidden sm:inline">{auth.session.agent.name}</span>
-                  </Link>
-                  <button
-                    onClick={auth.signOut}
-                    className="text-sm text-slate-500 hover:text-red-600 transition-colors"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/login"
-                  className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/register"
-                  className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                  Register
-                </Link>
-              </div>
-            )}
-          </div>
+        <div className="ml-auto flex items-center gap-5 md:ml-0">
+          {!auth.ready ? (
+            <span className="h-4 w-20" aria-hidden="true" />
+          ) : who ? (
+            <>
+              <Link
+                href="/notifications"
+                aria-current={isActive(pathname, '/notifications') || isActive(pathname, '/messages') ? 'page' : undefined}
+                className={`hidden text-[14px] transition-colors sm:inline ${isActive(pathname, '/notifications') || isActive(pathname, '/messages') ? 'font-medium text-text' : 'text-muted hover:text-text'}`}
+              >
+                Inbox
+              </Link>
+              <Link
+                href="/wallet"
+                aria-current={isActive(pathname, '/wallet') ? 'page' : undefined}
+                className={`hidden text-[14px] transition-colors sm:inline ${isActive(pathname, '/wallet') ? 'font-medium text-text' : 'text-muted hover:text-text'}`}
+              >
+                Wallet
+              </Link>
+              <Link href="/manage" className="figure max-w-[12rem] truncate text-[13px] text-text hover:text-paper-2" title={who.name}>
+                {handleLabel}
+              </Link>
+              <button type="button" onClick={auth.signOut} className="hidden text-[14px] text-muted transition-colors hover:text-text sm:inline">
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="hidden text-[14px] text-muted transition-colors hover:text-text sm:inline">
+                Sign in
+              </Link>
+              <Link href="/register" className="rounded-sm bg-paper px-3.5 py-2 text-[14px] font-medium leading-none text-paper-ink transition-colors hover:bg-paper-2">
+                Register
+              </Link>
+            </>
+          )}
+          <button
+            type="button"
+            className="text-[14px] text-muted transition-colors hover:text-text md:hidden"
+            aria-expanded={open}
+            aria-controls="mobile-nav"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? 'Close' : 'Menu'}
+          </button>
         </div>
       </div>
+
+      {open ? (
+        <nav id="mobile-nav" aria-label="Mobile" className="panel mt-2 grid gap-1 p-2 drop-in md:hidden">
+          {NAV.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link key={item.href} href={item.href} className={`rounded-sm px-3 py-2.5 text-[15px] ${active ? 'bg-ink-3 text-text' : 'text-muted'}`}>
+                {item.label}
+              </Link>
+            );
+          })}
+          {who ? (
+            <>
+              <Link href="/notifications" className="rounded-sm px-3 py-2.5 text-[15px] text-muted">
+                Inbox
+              </Link>
+              <Link href="/messages" className="rounded-sm px-3 py-2.5 text-[15px] text-muted">
+                Messages
+              </Link>
+              <Link href="/wallet" className="rounded-sm px-3 py-2.5 text-[15px] text-muted">
+                Wallet
+              </Link>
+              <Link href="/manage" className="rounded-sm px-3 py-2.5 text-[15px] text-muted">
+                Settings
+              </Link>
+              <button type="button" onClick={auth.signOut} className="rounded-sm px-3 py-2.5 text-left text-[15px] text-muted">
+                Sign out
+              </button>
+            </>
+          ) : (
+            <Link href="/login" className="rounded-sm px-3 py-2.5 text-[15px] text-muted">
+              Sign in
+            </Link>
+          )}
+        </nav>
+      ) : null}
     </header>
   );
 }

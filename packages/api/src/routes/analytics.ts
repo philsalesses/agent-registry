@@ -1,215 +1,140 @@
 import { Hono } from 'hono';
-import { eq, sql, desc, count } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray, sql } from 'drizzle-orm';
+import { TERMINAL_STATES, UNCONFIRMED_STATES, type ReceiptState } from 'ans-core';
 import { db } from '../db';
-import { agents, attestations, capabilities, agentCapabilities } from '../db/schema';
+import { agents, attestations, offers, receipts } from '../db/schema';
+import { config } from '../config';
+import { resolveAgent } from '../lib/auth';
+import { jsonAns, teach } from '../lib/errors';
+import { confirmedReceiptsSql, jsonbArray, policyOf, publicAgentView, receiptCountsOf, trustOf } from './agents';
+
+/**
+ * Registry-wide and per-agent statistics, read straight from the tables and
+ * the materialized trust columns. No in-process counters, no local trust
+ * formula (docs/DESIGN.md section 5 replaces analytics.ts:153-179).
+ */
 
 const analyticsRouter = new Hono();
 
-// Simple in-memory analytics (in production, use Redis or a proper analytics DB)
-const stats = {
-  apiCalls: new Map<string, number>(),
-  agentViews: new Map<string, number>(),
-  searches: 0,
-  registrations: 0,
-  attestationsCreated: 0,
-};
+const notSeed = eq(agents.isSeed, false);
 
-/**
- * Track an event (internal use)
- */
-export function trackEvent(event: string, agentId?: string): void {
-  switch (event) {
-    case 'api_call':
-      stats.apiCalls.set(agentId || 'global', (stats.apiCalls.get(agentId || 'global') || 0) + 1);
-      break;
-    case 'agent_view':
-      if (agentId) {
-        stats.agentViews.set(agentId, (stats.agentViews.get(agentId) || 0) + 1);
-      }
-      break;
-    case 'search':
-      stats.searches++;
-      break;
-    case 'registration':
-      stats.registrations++;
-      break;
-    case 'attestation':
-      stats.attestationsCreated++;
-      break;
-  }
-}
-
-/**
- * Get registry-wide statistics
- */
+// GET /v1/analytics/stats
 analyticsRouter.get('/stats', async (c) => {
-  // Count agents
-  const agentCount = await db.select({ count: count() }).from(agents);
-  
-  // Count by type
-  const byType = await db.select({
-    type: agents.type,
-    count: count(),
-  }).from(agents).groupBy(agents.type);
-  
-  // Count by status
-  const byStatus = await db.select({
-    status: agents.status,
-    count: count(),
-  }).from(agents).groupBy(agents.status);
-  
-  // Count attestations
-  const attestationCount = await db.select({ count: count() }).from(attestations);
-  
-  // Count capabilities
-  const capabilityCount = await db.select({ count: count() }).from(capabilities);
-  
-  // Recent registrations (last 7 days)
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const recentAgents = await db.query.agents.findMany({
-    where: sql`${agents.createdAt} > ${oneWeekAgo}`,
-    orderBy: desc(agents.createdAt),
-    limit: 10,
-  });
+  const confirmedStates = Array.from(TERMINAL_STATES).filter((s) => !UNCONFIRMED_STATES.has(s)) as ReceiptState[];
 
-  return c.json({
+  const [
+    [{ agentCount }],
+    byType,
+    byStatus,
+    [{ vouchCount }],
+    [{ offerCount }],
+    receiptsByState,
+    [{ confirmedReceipts }],
+    [{ volume }],
+    recent,
+  ] = await Promise.all([
+    db.select({ agentCount: count() }).from(agents).where(notSeed),
+    db.select({ type: agents.type, n: count() }).from(agents).where(notSeed).groupBy(agents.type),
+    db.select({ status: agents.status, n: count() }).from(agents).where(notSeed).groupBy(agents.status),
+    db.select({ vouchCount: count() }).from(attestations),
+    db.select({ offerCount: count() }).from(offers).where(eq(offers.status, 'active')),
+    db.select({ state: receipts.state, n: count() }).from(receipts).groupBy(receipts.state),
+    db.select({ confirmedReceipts: count() }).from(receipts).where(inArray(receipts.state, confirmedStates)),
+    db.select({ volume: sql<string>`coalesce(sum(${receipts.priceMicros}) filter (where ${receipts.creditClass} = 'cash'), 0)::text` }).from(receipts).where(inArray(receipts.state, confirmedStates)),
+    db.select().from(agents).where(and(notSeed, gt(agents.createdAt, oneWeekAgo))).orderBy(desc(agents.createdAt)).limit(10),
+  ]);
+
+  c.header('Cache-Control', 'public, max-age=60');
+  return jsonAns(c, {
     totals: {
-      agents: agentCount[0]?.count || 0,
-      attestations: attestationCount[0]?.count || 0,
-      capabilities: capabilityCount[0]?.count || 0,
+      agents: Number(agentCount),
+      vouches: Number(vouchCount),
+      activeOffers: Number(offerCount),
+      receipts: receiptsByState.reduce((sum, r) => sum + Number(r.n), 0),
+      confirmedReceipts: Number(confirmedReceipts),
+      confirmedCashVolumeMicros: String(volume ?? '0'),
     },
-    agentsByType: Object.fromEntries(byType.map(r => [r.type, r.count])),
-    agentsByStatus: Object.fromEntries(byStatus.map(r => [r.status, r.count])),
-    recentRegistrations: recentAgents.map(a => ({
+    agentsByType: Object.fromEntries(byType.map((r) => [r.type, Number(r.n)])),
+    agentsByStatus: Object.fromEntries(byStatus.map((r) => [r.status ?? 'unknown', Number(r.n)])),
+    receiptsByState: Object.fromEntries(receiptsByState.map((r) => [r.state, Number(r.n)])),
+    recentRegistrations: recent.map((a) => ({ id: a.id, handle: a.handle, name: a.name, type: a.type, trust: trustOf(a), createdAt: a.createdAt })),
+  });
+});
+
+// GET /v1/analytics/leaderboard?limit=
+analyticsRouter.get('/leaderboard', async (c) => {
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '10', 10) || 10, 1), 100);
+  const rows = await db
+    .select()
+    .from(agents)
+    .where(and(notSeed, eq(agents.isHouse, false)))
+    .orderBy(desc(agents.trustRank), desc(confirmedReceiptsSql), desc(agents.createdAt))
+    .limit(limit);
+  c.header('Cache-Control', 'public, max-age=60');
+  return jsonAns(c, {
+    agents: rows.map((a, i) => ({
+      position: i + 1,
       id: a.id,
+      handle: a.handle,
       name: a.name,
       type: a.type,
-      createdAt: a.createdAt,
+      avatar: a.avatar,
+      trust: trustOf(a),
+      trustScore: a.trustScore,
+      receiptCounts: receiptCountsOf(a),
     })),
-    session: {
-      apiCalls: Array.from(stats.apiCalls.entries()).reduce((sum, [_, v]) => sum + v, 0),
-      searches: stats.searches,
-      registrations: stats.registrations,
-      attestationsCreated: stats.attestationsCreated,
-    },
+    ordering: 'trust_rank desc',
   });
 });
 
-/**
- * Get statistics for a specific agent
- */
+// GET /v1/analytics/capabilities: how many agents carry each tag
+analyticsRouter.get('/capabilities', async (c) => {
+  const rows = await db.execute(sql`
+    select tag, count(*)::int as n
+    from ${agents}, jsonb_array_elements_text(${jsonbArray(agents.tags)}) as tag
+    where ${agents.isSeed} = false
+    group by tag
+    order by n desc, tag asc
+    limit 200
+  `);
+  const list = (rows as unknown as { tag: string; n: number }[]).map((r) => ({ id: r.tag, agentCount: Number(r.n) }));
+  c.header('Cache-Control', 'public, max-age=300');
+  return jsonAns(c, { total: list.length, capabilities: list });
+});
+
+// GET /v1/analytics/agent/:idOrHandle
 analyticsRouter.get('/agent/:id', async (c) => {
-  const agentId = c.req.param('id');
+  const agent = await resolveAgent(c.req.param('id'));
+  if (!agent) return teach(c, 404, 'not_found', `Agent ${c.req.param('id')} not found`);
 
-  const agent = await db.query.agents.findFirst({
-    where: eq(agents.id, agentId),
-  });
+  const [[received], [given], [activeOffers], [asClient], [asProvider]] = await Promise.all([
+    db.select({ n: count() }).from(attestations).where(eq(attestations.subjectId, agent.id)),
+    db.select({ n: count() }).from(attestations).where(eq(attestations.attesterId, agent.id)),
+    db.select({ n: count() }).from(offers).where(and(eq(offers.agentId, agent.id), eq(offers.status, 'active'))),
+    db.select({ n: count() }).from(receipts).where(eq(receipts.clientId, agent.id)),
+    db.select({ n: count() }).from(receipts).where(eq(receipts.providerId, agent.id)),
+  ]);
 
-  if (!agent) {
-    return c.json({ error: 'Agent not found' }, 404);
-  }
-
-  // Count attestations received
-  const attestationsReceived = await db.select({ count: count() })
-    .from(attestations)
-    .where(eq(attestations.subjectId, agentId));
-
-  // Count attestations made
-  const attestationsMade = await db.select({ count: count() })
-    .from(attestations)
-    .where(eq(attestations.attesterId, agentId));
-
-  // Get capabilities
-  const agentCaps = await db.query.agentCapabilities.findMany({
-    where: eq(agentCapabilities.agentId, agentId),
-  });
-
-  // Views from session
-  const views = stats.agentViews.get(agentId) || 0;
-
-  return c.json({
-    agentId,
+  c.header('Cache-Control', 'public, max-age=60');
+  return jsonAns(c, {
+    agentId: agent.id,
+    handle: agent.handle,
     name: agent.name,
-    createdAt: agent.createdAt,
-    attestationsReceived: attestationsReceived[0]?.count || 0,
-    attestationsMade: attestationsMade[0]?.count || 0,
-    capabilities: agentCaps.length,
-    sessionViews: views,
     status: agent.status,
     lastSeen: agent.lastSeen,
-  });
-});
-
-/**
- * Get top agents by trust score
- */
-analyticsRouter.get('/leaderboard', async (c) => {
-  const limit = parseInt(c.req.query('limit') || '10', 10);
-
-  const allAgents = await db.query.agents.findMany({
-    orderBy: desc(agents.createdAt),
-  });
-
-  // Compute trust scores (simplified)
-  const scored = await Promise.all(
-    allAgents.map(async (agent) => {
-      const agentAttestations = await db.query.attestations.findMany({
-        where: eq(attestations.subjectId, agent.id),
-      });
-
-      const behaviorScores = agentAttestations
-        .filter(a => a.claimType === 'behavior')
-        .map(a => typeof a.claimValue === 'number' ? a.claimValue : 50);
-
-      const avgBehavior = behaviorScores.length > 0
-        ? behaviorScores.reduce((a, b) => a + b, 0) / behaviorScores.length
-        : 50;
-
-      const uniqueAttesters = new Set(agentAttestations.map(a => a.attesterId)).size;
-
-      return {
-        id: agent.id,
-        name: agent.name,
-        type: agent.type,
-        trustScore: Math.round(avgBehavior * 0.8 + Math.min(uniqueAttesters * 4, 20)),
-        attestationCount: agentAttestations.length,
-        verified: (agent.metadata as any)?.verified === true,
-      };
-    })
-  );
-
-  const leaderboardAgents = scored
-    .filter(a => a.trustScore > 0 || a.attestationCount > 0)
-    .sort((a, b) => b.trustScore - a.trustScore)
-    .slice(0, limit);
-
-  return c.json({ agents: leaderboardAgents });
-});
-
-/**
- * Get capability statistics
- */
-analyticsRouter.get('/capabilities', async (c) => {
-  const allCaps = await db.query.capabilities.findMany();
-  
-  // Count agents per capability
-  const capStats = await Promise.all(
-    allCaps.map(async (cap) => {
-      const capAgents = await db.select({ count: count() })
-        .from(agentCapabilities)
-        .where(eq(agentCapabilities.capabilityId, cap.id));
-      
-      return {
-        id: cap.id,
-        description: cap.description,
-        agentCount: capAgents[0]?.count || 0,
-      };
-    })
-  );
-
-  return c.json({
-    total: allCaps.length,
-    capabilities: capStats.sort((a, b) => b.agentCount - a.agentCount),
+    createdAt: agent.createdAt,
+    trust: trustOf(agent),
+    receiptCounts: receiptCountsOf(agent),
+    receipts: { asClient: Number(asClient?.n ?? 0), asProvider: Number(asProvider?.n ?? 0) },
+    vouches: { received: Number(received?.n ?? 0), given: Number(given?.n ?? 0), weight: 0 },
+    activeOffers: Number(activeOffers?.n ?? 0),
+    tags: publicAgentView(agent).tags,
+    policy: policyOf(agent),
+    urls: {
+      profile: `${config.publicWebUrl}/agent/${agent.id}`,
+      trust: `${config.publicApiUrl}/v1/agents/${agent.id}/trust`,
+    },
   });
 });
 

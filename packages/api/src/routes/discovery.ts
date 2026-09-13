@@ -1,346 +1,188 @@
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { sql, eq, gte, and, or, ilike, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
+import { generateId, sha256hex } from 'ans-core';
 import { db } from '../db';
-import { agents, agentCapabilities, attestations } from '../db/schema';
+import { agents, funnelEvents, offers, type OfferStats } from '../db/schema';
+import { recordFunnel } from '../lib/funnel';
+import { config } from '../config';
+import { jsonAns } from '../lib/errors';
+import { clientIp } from '../lib/ratelimit';
+import { jsonbArray, offerName, publicAgentView, trustOf } from './agents';
+
+/**
+ * Discovery (docs/DESIGN.md section 4 and 14.10). Filters run on
+ * agents.tags (jsonb) and offers.tags; results are ordered by trust_rank
+ * desc, then last_seen desc nulls last. Seed rows are never returned. The
+ * hardcoded keyword map is gone: /find searches offers first, agents second.
+ */
 
 const discoveryRouter = new Hono();
 
-// Discover agents with filters
+const agentTypeSchema = z.enum(['assistant', 'autonomous', 'tool', 'service']);
+const protocolSchema = z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc']);
+const statusSchema = z.enum(['online', 'offline', 'maintenance', 'unknown']);
+
 const discoverSchema = z.object({
-  capabilities: z.array(z.string()).optional(),
-  minTrustScore: z.number().min(0).max(100).optional(),
-  types: z.array(z.enum(['assistant', 'autonomous', 'tool', 'service'])).optional(),
-  protocols: z.array(z.enum(['a2a', 'mcp', 'http', 'websocket', 'grpc'])).optional(),
-  tags: z.array(z.string()).optional(),
-  status: z.array(z.enum(['online', 'offline', 'maintenance', 'unknown'])).optional(),
-  query: z.string().optional(),
-  limit: z.number().min(1).max(100).default(20),
-  offset: z.number().min(0).default(0),
+  capabilities: z.array(z.string().min(1).max(64)).max(32).optional(),
+  tags: z.array(z.string().min(1).max(64)).max(32).optional(),
+  types: z.array(agentTypeSchema).optional(),
+  protocols: z.array(protocolSchema).optional(),
+  status: z.array(statusSchema).optional(),
+  minTrust: z.number().int().min(0).max(100).optional(),
+  /** legacy alias of minTrust */
+  minTrustScore: z.number().int().min(0).max(100).optional(),
+  query: z.string().max(200).optional(),
+  limit: z.number().int().min(1).max(100).default(20),
+  offset: z.number().int().min(0).max(100_000).default(0),
 });
 
-discoveryRouter.post('/', zValidator('json', discoverSchema), async (c) => {
-  const body = c.req.valid('json');
+/** `column ?| array[...]`: the jsonb string array contains any of the values (either jsonb encoding). */
+function jsonbHasAny(column: SQLWrapper, values: string[]): SQL {
+  const list = sql.join(values.map((v) => sql`${v}`), sql`, `);
+  return sql`${jsonbArray(column)} ?| array[${list}]::text[]`;
+}
 
-  // If filtering by capabilities, get matching agent IDs first
-  let capabilityAgentIds: string[] | null = null;
-  if (body.capabilities && body.capabilities.length > 0) {
-    const capResults = await db
-      .select({ agentId: agentCapabilities.agentId })
-      .from(agentCapabilities)
-      .where(inArray(agentCapabilities.capabilityId, body.capabilities));
-    capabilityAgentIds = [...new Set(capResults.map(r => r.agentId))];
-    
-    // If no agents have these capabilities, return empty
-    if (capabilityAgentIds.length === 0) {
-      return c.json({ agents: [], total: 0, hasMore: false });
-    }
-  }
+const rankOrder = [desc(agents.trustRank), sql`${agents.lastSeen} desc nulls last`, desc(agents.createdAt)];
 
-  // Build where conditions
-  const conditions: any[] = [];
-  
-  if (capabilityAgentIds) {
-    conditions.push(inArray(agents.id, capabilityAgentIds));
-  }
-  
-  if (body.types && body.types.length > 0) {
-    conditions.push(inArray(agents.type, body.types));
-  }
-  
-  if (body.status && body.status.length > 0) {
-    conditions.push(inArray(agents.status, body.status));
-  }
-  
-  if (body.query) {
-    const q = `%${body.query}%`;
-    conditions.push(or(
-      ilike(agents.name, q),
-      ilike(agents.description, q)
-    ));
-  }
+function textMatch(q: string): SQL {
+  const pattern = `%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+  return or(ilike(agents.name, pattern), ilike(agents.description, pattern), ilike(agents.handle, pattern))!;
+}
 
-  // Execute query
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-  
-  const results = await db.query.agents.findMany({
-    where: whereClause,
+function intQuery(value: string | undefined, fallback: number, min: number, max: number): number {
+  const n = parseInt(value ?? '', 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+// POST /v1/discover
+discoveryRouter.post('/', async (c) => {
+  const body = discoverSchema.parse(await c.req.json());
+  const conditions: SQL[] = [eq(agents.isSeed, false)];
+
+  const tagFilter = Array.from(new Set([...(body.capabilities ?? []), ...(body.tags ?? [])].map((t) => t.trim().toLowerCase()).filter(Boolean)));
+  if (tagFilter.length > 0) conditions.push(jsonbHasAny(agents.tags, tagFilter));
+  if (body.protocols && body.protocols.length > 0) conditions.push(jsonbHasAny(agents.protocols, body.protocols));
+  if (body.types && body.types.length > 0) conditions.push(inArray(agents.type, body.types));
+  if (body.status && body.status.length > 0) conditions.push(inArray(agents.status, body.status));
+  const minTrust = body.minTrust ?? body.minTrustScore;
+  if (minTrust !== undefined && minTrust > 0) conditions.push(gte(agents.trustScore, minTrust));
+  if (body.query && body.query.trim()) conditions.push(textMatch(body.query.trim()));
+
+  const where = and(...conditions);
+  const [rows, [{ total }]] = await Promise.all([
+    db.select().from(agents).where(where).orderBy(...rankOrder).limit(body.limit).offset(body.offset),
+    db.select({ total: count() }).from(agents).where(where),
+  ]);
+
+  return jsonAns(c, {
+    agents: rows.map(publicAgentView),
+    total: Number(total),
+    hasMore: body.offset + rows.length < Number(total),
     limit: body.limit,
     offset: body.offset,
-    orderBy: (agents, { desc }) => [desc(agents.createdAt)],
-  });
-
-  // Post-filter for protocols and tags (stored as JSON arrays)
-  let filtered = results;
-  
-  if (body.protocols && body.protocols.length > 0) {
-    filtered = filtered.filter(a => {
-      const agentProtocols = (a.protocols as string[]) || [];
-      return body.protocols!.some(p => agentProtocols.includes(p));
-    });
-  }
-
-  if (body.tags && body.tags.length > 0) {
-    filtered = filtered.filter(a => {
-      const agentTags = (a.tags as string[]) || [];
-      return body.tags!.some(t => agentTags.includes(t));
-    });
-  }
-
-  // Get trust scores for results
-  const agentIds = filtered.map(a => a.id);
-  const trustScores: Record<string, number> = {};
-  const verified: Record<string, boolean> = {};
-  
-  if (agentIds.length > 0) {
-    // Get behavior attestations for trust scores
-    const behaviorAttestations = await db
-      .select({
-        subjectId: attestations.subjectId,
-        value: attestations.claimValue,
-      })
-      .from(attestations)
-      .where(and(
-        inArray(attestations.subjectId, agentIds),
-        eq(attestations.claimType, 'behavior')
-      ));
-
-    // Calculate average trust score per agent
-    const scores: Record<string, number[]> = {};
-    for (const att of behaviorAttestations) {
-      if (!scores[att.subjectId]) scores[att.subjectId] = [];
-      scores[att.subjectId].push(att.value as number);
-    }
-    for (const [id, vals] of Object.entries(scores)) {
-      trustScores[id] = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-    }
-    
-    // Check verified status
-    for (const agent of filtered) {
-      verified[agent.id] = (agent.metadata as any)?.verified === true;
-    }
-  }
-
-  // Filter by minTrustScore if specified
-  if (body.minTrustScore) {
-    filtered = filtered.filter(a => (trustScores[a.id] || 0) >= body.minTrustScore!);
-  }
-
-  // Count total (for pagination)
-  const countResult = await db.select({ count: sql<number>`count(*)` })
-    .from(agents)
-    .where(whereClause);
-  const total = Number(countResult[0]?.count || 0);
-
-  return c.json({
-    agents: filtered.map(a => ({
-      ...a,
-      trustScore: trustScores[a.id] || 0,
-      verified: verified[a.id] || false,
-    })),
-    total,
-    hasMore: body.offset + filtered.length < total,
+    ordering: 'trust_rank desc, last_seen desc',
   });
 });
 
-// Quick search endpoint - searches name AND description
+// GET /v1/discover/search?q=&limit=&offset=
 discoveryRouter.get('/search', async (c) => {
-  const query = c.req.query('q') || '';
-  const limit = parseInt(c.req.query('limit') || '20', 10);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
+  const q = (c.req.query('q') ?? '').trim();
+  const limit = intQuery(c.req.query('limit'), 20, 1, 100);
+  const offset = intQuery(c.req.query('offset'), 0, 0, 100_000);
+  if (!q) return jsonAns(c, { agents: [], total: 0, limit, offset });
 
-  if (!query) {
-    return c.json({ agents: [], total: 0 });
-  }
-
-  const q = `%${query}%`;
-  
-  const results = await db.query.agents.findMany({
-    where: or(
-      ilike(agents.name, q),
-      ilike(agents.description, q)
-    ),
-    limit,
-    offset,
-    orderBy: (agents, { desc }) => [desc(agents.createdAt)],
-  });
-
-  // Get trust scores
-  const agentIds = results.map(a => a.id);
-  const trustScores: Record<string, number> = {};
-  
-  if (agentIds.length > 0) {
-    const behaviorAttestations = await db
-      .select({
-        subjectId: attestations.subjectId,
-        value: attestations.claimValue,
-      })
-      .from(attestations)
-      .where(and(
-        inArray(attestations.subjectId, agentIds),
-        eq(attestations.claimType, 'behavior')
-      ));
-
-    const scores: Record<string, number[]> = {};
-    for (const att of behaviorAttestations) {
-      if (!scores[att.subjectId]) scores[att.subjectId] = [];
-      scores[att.subjectId].push(att.value as number);
-    }
-    for (const [id, vals] of Object.entries(scores)) {
-      trustScores[id] = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-    }
-  }
-
-  return c.json({
-    agents: results.map(a => ({
-      ...a,
-      trustScore: trustScores[a.id] || 0,
-      verified: (a.metadata as any)?.verified === true,
-    })),
-    total: results.length,
-  });
+  const where = and(eq(agents.isSeed, false), textMatch(q));
+  const [rows, [{ total }]] = await Promise.all([
+    db.select().from(agents).where(where).orderBy(...rankOrder).limit(limit).offset(offset),
+    db.select({ total: count() }).from(agents).where(where),
+  ]);
+  return jsonAns(c, { agents: rows.map(publicAgentView), total: Number(total), limit, offset });
 });
 
-// Get agents by capability
-discoveryRouter.get('/capability/:id', async (c) => {
-  const capabilityId = c.req.param('id');
-  const minScore = parseInt(c.req.query('minScore') || '0', 10);
-  const limit = parseInt(c.req.query('limit') || '20', 10);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
+export interface OfferSearchResult {
+  id: string;
+  name: string;
+  slug: string;
+  version: number;
+  title: string;
+  description: string | null;
+  tags: string[];
+  priceMicros: string;
+  acceptsSandbox: boolean;
+  stats: OfferStats;
+  owner: { id: string; handle: string | null; name: string; trust: ReturnType<typeof trustOf> };
+  urls: { page: string; offer: string; mcp: string; skill: string; invoke: string };
+}
 
-  const results = await db
-    .select({
-      agent: agents,
-      capabilityTrustScore: agentCapabilities.trustScore,
-      capabilityVerified: agentCapabilities.verified,
-    })
-    .from(agentCapabilities)
-    .innerJoin(agents, eq(agentCapabilities.agentId, agents.id))
-    .where(
-      and(
-        eq(agentCapabilities.capabilityId, capabilityId),
-        gte(agentCapabilities.trustScore, minScore)
-      )
-    )
-    .orderBy(sql`${agentCapabilities.trustScore} DESC`)
-    .limit(limit)
-    .offset(offset);
+/** Search active offers by title, description, slug and tags; owner rank first, then successful calls. */
+export async function searchOffers(q: string, limit: number): Promise<OfferSearchResult[]> {
+  const pattern = `%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+  const rows = await db
+    .select({ offer: offers, owner: agents })
+    .from(offers)
+    .innerJoin(agents, eq(offers.agentId, agents.id))
+    .where(and(
+      eq(offers.status, 'active'),
+      eq(agents.isSeed, false),
+      or(
+        ilike(offers.title, pattern),
+        ilike(offers.description, pattern),
+        ilike(offers.slug, pattern),
+        sql`${offers.tags}::text ilike ${pattern}`,
+      ),
+    ))
+    .orderBy(desc(agents.trustRank), sql`coalesce((${offers.stats}->>'ok')::int, 0) desc`, desc(offers.createdAt))
+    .limit(limit);
 
-  return c.json({
-    capability: capabilityId,
-    agents: results.map(r => ({
-      ...r.agent,
-      trustScore: r.capabilityTrustScore,
-      verified: r.capabilityVerified || (r.agent.metadata as any)?.verified === true,
-    })),
-    total: results.length,
+  return rows.map(({ offer, owner }) => {
+    const handle = owner.handle ?? owner.id;
+    return {
+      id: offer.id,
+      name: offerName(owner.handle, offer.slug, offer.version),
+      slug: offer.slug,
+      version: offer.version,
+      title: offer.title,
+      description: offer.description,
+      tags: offer.tags ?? [],
+      priceMicros: offer.priceMicros.toString(),
+      acceptsSandbox: offer.acceptsSandbox,
+      stats: offer.stats ?? {},
+      owner: { id: owner.id, handle: owner.handle, name: owner.name, trust: trustOf(owner) },
+      urls: {
+        page: `${config.publicWebUrl}/offers/@${handle}/${offer.slug}`,
+        offer: `${config.publicApiUrl}/v1/offers/${offer.id}`,
+        mcp: `${config.publicApiUrl}/mcp/offer/@${handle}/${offer.slug}`,
+        skill: `${config.publicApiUrl}/v1/offers/${offer.id}/skill.md`,
+        invoke: `${config.publicApiUrl}/v1/invoke`,
+      },
+    };
   });
-});
+}
 
-// Natural language capability search
+// GET /v1/discover/find?q=&limit=  (offers first, then agents)
 discoveryRouter.get('/find', async (c) => {
-  const query = c.req.query('q') || '';
-  const limit = parseInt(c.req.query('limit') || '20', 10);
+  const q = (c.req.query('q') ?? '').trim();
+  const limit = intQuery(c.req.query('limit'), 20, 1, 100);
+  if (!q) return jsonAns(c, { query: q, offers: [], agents: [], hint: 'Pass ?q=<what you need done>' });
 
-  if (!query) {
-    return c.json({ agents: [], capabilities: [], suggestion: null });
+  const [offerResults, agentRows] = await Promise.all([
+    searchOffers(q, limit),
+    db.select().from(agents).where(and(eq(agents.isSeed, false), textMatch(q))).orderBy(...rankOrder).limit(limit),
+  ]);
+
+  if (offerResults.length === 0 && agentRows.length === 0) {
+    void recordFunnel('find.empty', { src: 'api', ip: clientIp(c), detail: q });
   }
 
-  // Common natural language → capability mappings
-  const queryMappings: Record<string, string[]> = {
-    'book flight': ['travel-booking', 'api-integration', 'payments'],
-    'book travel': ['travel-booking', 'api-integration', 'payments'],
-    'plane ticket': ['travel-booking', 'api-integration', 'payments'],
-    'send email': ['email-management', 'messaging'],
-    'write email': ['email-management', 'text-generation'],
-    'code': ['code-generation', 'code-execution', 'code-review'],
-    'coding': ['code-generation', 'code-execution', 'code-review'],
-    'program': ['code-generation', 'code-execution'],
-    'image': ['image-generation', 'image-analysis', 'image-editing'],
-    'picture': ['image-generation', 'image-analysis'],
-    'photo': ['image-generation', 'image-analysis', 'image-editing'],
-    'search': ['web-search', 'web-browsing'],
-    'browse': ['web-browsing', 'web-search'],
-    'research': ['web-search', 'web-browsing', 'text-summarization'],
-    'schedule': ['calendar-management', 'meeting-scheduling'],
-    'meeting': ['meeting-scheduling', 'calendar-management'],
-    'calendar': ['calendar-management', 'meeting-scheduling'],
-    'pay': ['payments', 'crypto-operations'],
-    'payment': ['payments', 'crypto-operations'],
-    'money': ['payments', 'crypto-operations'],
-    'translate': ['translation'],
-    'speak': ['text-to-speech', 'audio-generation'],
-    'voice': ['text-to-speech', 'audio-generation', 'audio-transcription'],
-    'transcribe': ['audio-transcription'],
-    'summarize': ['text-summarization'],
-    'analyze': ['data-analysis', 'sentiment-analysis', 'reasoning'],
-    'smart home': ['smart-home', 'iot-sensors'],
-    'home': ['smart-home', 'iot-sensors'],
-    'weather': ['weather'],
-    'news': ['news', 'web-search'],
-    'document': ['document-generation', 'pdf-processing'],
-    'pdf': ['pdf-processing', 'document-generation'],
-    'spreadsheet': ['spreadsheet-operations', 'data-analysis'],
-    'excel': ['spreadsheet-operations', 'data-analysis'],
-  };
-
-  // Find matching capabilities
-  const queryLower = query.toLowerCase();
-  let matchedCapabilities: string[] = [];
-  
-  for (const [keyword, caps] of Object.entries(queryMappings)) {
-    if (queryLower.includes(keyword)) {
-      matchedCapabilities.push(...caps);
-    }
-  }
-  matchedCapabilities = [...new Set(matchedCapabilities)];
-
-  // If we found capability matches, search by those
-  if (matchedCapabilities.length > 0) {
-    const capResults = await db
-      .select({ agentId: agentCapabilities.agentId })
-      .from(agentCapabilities)
-      .where(inArray(agentCapabilities.capabilityId, matchedCapabilities));
-    
-    const agentIds = [...new Set(capResults.map(r => r.agentId))];
-    
-    if (agentIds.length > 0) {
-      const agentResults = await db.query.agents.findMany({
-        where: inArray(agents.id, agentIds),
-        limit,
-      });
-
-      return c.json({
-        agents: agentResults.map(a => ({
-          ...a,
-          verified: (a.metadata as any)?.verified === true,
-        })),
-        capabilities: matchedCapabilities,
-        suggestion: `Found agents with capabilities: ${matchedCapabilities.join(', ')}`,
-      });
-    }
-  }
-
-  // Fallback to text search
-  const q = `%${query}%`;
-  const textResults = await db.query.agents.findMany({
-    where: or(
-      ilike(agents.name, q),
-      ilike(agents.description, q)
-    ),
-    limit,
-  });
-
-  return c.json({
-    agents: textResults.map(a => ({
-      ...a,
-      verified: (a.metadata as any)?.verified === true,
-    })),
-    capabilities: [],
-    suggestion: matchedCapabilities.length > 0 
-      ? `Looking for: ${matchedCapabilities.join(', ')}. No agents found yet.`
-      : null,
+  return jsonAns(c, {
+    query: q,
+    offers: offerResults,
+    agents: agentRows.map(publicAgentView),
+    next: offerResults.length > 0
+      ? 'POST /v1/invoke {offer: <name>, input} calls an offer and opens a receipt automatically'
+      : 'No offer matched. Publish one: POST /v1/offers, or ask an agent directly and open a receipt: POST /v1/receipts',
   });
 });
 

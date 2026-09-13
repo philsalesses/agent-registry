@@ -1,15 +1,18 @@
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
-import { eq, and } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '../db';
-import { capabilities, agentCapabilities, agents } from '../db/schema';
-import { generateId } from 'ans-core';
-import { verifySessionToken } from './auth';
+import { capabilities } from '../db/schema';
+import { jsonAns, teach } from '../lib/errors';
+
+/**
+ * The controlled tag vocabulary (docs/DESIGN.md 14.10). Read-only: agents
+ * carry these ids in `agents.tags`, offers in `offers.tags`. POST and the
+ * per-capability agent listing are gone; discovery filters on tags instead.
+ */
 
 const capabilitiesRouter = new Hono();
 
-// Common capability IDs that agents can use
+/** A short suggested subset for registration forms and tool descriptions. */
 export const COMMON_CAPABILITIES = [
   { id: 'text-generation', description: 'Generate text content, articles, summaries' },
   { id: 'code-generation', description: 'Write and generate code in various languages' },
@@ -31,79 +34,27 @@ export const COMMON_CAPABILITIES = [
   { id: 'audio-transcription', description: 'Transcribe audio to text' },
   { id: 'text-to-speech', description: 'Convert text to spoken audio' },
   { id: 'agent-coordination', description: 'Coordinate with other AI agents' },
-];
+] as const;
 
-// Create a new capability definition
-const createCapabilitySchema = z.object({
-  id: z.string().min(1).max(64),
-  description: z.string(),
-  version: z.string().default('1.0.0'),
-  inputSchema: z.record(z.unknown()).optional(),
-  outputSchema: z.record(z.unknown()).optional(),
+// GET /v1/capabilities: the full vocabulary
+capabilitiesRouter.get('/', async (c) => {
+  const rows = await db.select().from(capabilities).orderBy(asc(capabilities.id));
+  c.header('Cache-Control', 'public, max-age=300');
+  return jsonAns(c, { capabilities: rows, usage: 'Put capability ids in agents.tags (PATCH /v1/agents/:id) and offers.tags; POST /v1/discover {tags: [...]} filters on them' });
 });
 
-capabilitiesRouter.post('/', zValidator('json', createCapabilitySchema), async (c) => {
-  const body = c.req.valid('json');
-
-  const [capability] = await db.insert(capabilities).values(body).returning();
-  return c.json(capability, 201);
+// GET /v1/capabilities/common (registered before /:id so the literal segment wins)
+capabilitiesRouter.get('/common', (c) => {
+  c.header('Cache-Control', 'public, max-age=300');
+  return jsonAns(c, { capabilities: COMMON_CAPABILITIES });
 });
 
-// Get capability by ID
+// GET /v1/capabilities/:id
 capabilitiesRouter.get('/:id', async (c) => {
   const id = c.req.param('id');
-  
-  const capability = await db.query.capabilities.findFirst({
-    where: eq(capabilities.id, id),
-  });
-
-  if (!capability) {
-    return c.json({ error: 'Capability not found' }, 404);
-  }
-
-  return c.json(capability);
-});
-
-// List all capabilities
-capabilitiesRouter.get('/', async (c) => {
-  const results = await db.query.capabilities.findMany({
-    orderBy: (capabilities, { asc }) => [asc(capabilities.id)],
-  });
-
-  return c.json({ capabilities: results });
-});
-
-// Get list of common/suggested capabilities
-capabilitiesRouter.get('/common', async (c) => {
-  return c.json({ capabilities: COMMON_CAPABILITIES });
-});
-
-// Get agents with a specific capability
-capabilitiesRouter.get('/:id/agents', async (c) => {
-  const capabilityId = c.req.param('id');
-  const minScore = parseInt(c.req.query('minScore') || '0', 10);
-
-  const results = await db.query.agentCapabilities.findMany({
-    where: eq(agentCapabilities.capabilityId, capabilityId),
-  });
-
-  // Get agent details
-  const agentIds = results.map(r => r.agentId);
-  const agentList = await Promise.all(
-    agentIds.map(id => db.query.agents.findFirst({ where: eq(agents.id, id) }))
-  );
-
-  const enriched = results.map((r, i) => ({
-    ...r,
-    agent: agentList[i] ? {
-      id: agentList[i]!.id,
-      name: agentList[i]!.name,
-      type: agentList[i]!.type,
-      description: agentList[i]!.description,
-    } : null,
-  })).filter(r => r.agent);
-
-  return c.json({ capability: capabilityId, agents: enriched });
+  const capability = await db.query.capabilities.findFirst({ where: eq(capabilities.id, id) });
+  if (!capability) return teach(c, 404, 'not_found', `Capability ${id} is not in the vocabulary`, { fix: { docs: 'https://ans-registry.org/skill.md', next: 'GET /v1/capabilities lists every known id' } });
+  return jsonAns(c, capability);
 });
 
 export { capabilitiesRouter };

@@ -1,0 +1,20 @@
+{
+  "name": "ans",
+  "version": "2.0.0",
+  "description": "ANS: receipts and trust for agent work. Adds the ANS MCP server (register, verify, receipts, offers, invoke, wallet) and the ans skill.",
+  "author": {
+    "name": "Phil Salesses",
+    "url": "https://github.com/philsalesses"
+  },
+  "homepage": "https://ans-registry.org",
+  "repository": "https://github.com/philsalesses/agent-registry",
+  "license": "MIT",
+  "keywords": ["ans", "receipts", "trust", "agents", "mcp"],
+  "mcpServers": {
+    "ans": {
+      "command": "npx",
+      "args": ["-y", "ans-mcp"]
+    }
+  },
+  "skills": ["./skills/ans"]
+}

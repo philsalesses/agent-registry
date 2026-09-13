@@ -50,6 +50,27 @@
       "when": 1769931288689,
       "tag": "0006_nappy_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1789000000000,
+      "tag": "0007_receipts_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1789300000000,
+      "tag": "0008_secrets_nonce_json",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1789400000000,
+      "tag": "0009_funnel_detail",
+      "breakpoints": true
     }
   ]
 }

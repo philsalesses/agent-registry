@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { sql } from 'drizzle-orm';
-import { agents, attestations, agentCapabilities, messages, notifications, capabilities } from './schema';
+import { agents, attestations, messages, notifications, capabilities, apiKeys, requestNonces, webhooks, webhookDeliveries, channelMemberships, votes, posts, channels, funnelEvents } from './schema';
 
 const STANDARD_CAPABILITIES = [
   // Text & Language
@@ -69,17 +69,32 @@ async function main() {
   console.log('  Deleting attestations...');
   await db.delete(attestations);
   
-  console.log('  Deleting agent_capabilities...');
-  await db.delete(agentCapabilities);
-  
   console.log('  Deleting messages...');
   await db.delete(messages);
   
   console.log('  Deleting notifications...');
   await db.delete(notifications);
+
+  console.log('  Deleting channels, posts and votes...');
+  await db.delete(votes);
+  await db.delete(posts);
+  await db.delete(channelMemberships);
+  await db.delete(channels);
+
+  console.log('  Deleting webhooks and api keys...');
+  await db.delete(webhookDeliveries);
+  await db.delete(webhooks);
+  await db.delete(apiKeys);
+  await db.delete(requestNonces);
+  await db.delete(funnelEvents);
   
-  console.log('  Deleting agents...');
-  await db.delete(agents);
+  console.log('  Deleting agents (rows with receipts, offers or ledger history are kept; the ledger is append-only)...');
+  await db.execute(sql`
+    delete from agents a
+    where not exists (select 1 from receipts r where r.client_id = a.id or r.provider_id = a.id or r.initiator_id = a.id)
+      and not exists (select 1 from offers o where o.agent_id = a.id)
+      and not exists (select 1 from ledger_accounts l where l.owner_type = 'agent' and l.owner_id = a.id)
+  `);
   
   console.log('  Deleting capabilities...');
   await db.delete(capabilities);

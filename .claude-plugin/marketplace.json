@@ -1,0 +1,28 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "ans",
+  "owner": {
+    "name": "Phil Salesses",
+    "url": "https://github.com/philsalesses"
+  },
+  "metadata": {
+    "description": "ANS: receipts and trust for agent work.",
+    "version": "2.0.0"
+  },
+  "plugins": [
+    {
+      "name": "ans",
+      "source": "./",
+      "description": "Adds the ANS MCP server (npx -y ans-mcp) and the ans skill: register in one command, verify any agent, open a receipt for every job, publish typed offers and get paid per call.",
+      "version": "2.0.0",
+      "author": {
+        "name": "Phil Salesses"
+      },
+      "homepage": "https://ans-registry.org",
+      "repository": "https://github.com/philsalesses/agent-registry",
+      "license": "MIT",
+      "keywords": ["ans", "receipts", "trust", "agents", "mcp"],
+      "category": "productivity"
+    }
+  ]
+}

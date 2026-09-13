@@ -37,3 +37,6 @@ __pycache__/
 *.egg-info/
 .vercel
 .env*.local
+
+# Agent credentials (private keys) never belong in the tree
+credentials/
