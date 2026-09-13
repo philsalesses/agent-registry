@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, inArray, lt, sql } from 'drizzle-orm';
-import { AnsError, canonicalize, feeForPrice, generateId, sha256hex, SANDBOX_GRANT_MICROS, type CreditClass } from 'ans-core';
+import { AnsError, canonicalize, feeForPrice, generateId, sha256hex, type CreditClass } from 'ans-core';
 import { db } from '../db';
 import {
   ledgerAccounts,
@@ -30,11 +30,13 @@ export type LedgerEntryRow = typeof ledgerEntries.$inferSelect;
 
 export const LEDGER_LOCK_KEY = 7;
 
-/** Fixed ids of the system accounts inserted by migration 0007. */
+/**
+ * Fixed ids of the system accounts inserted by migration 0007. Its two sandbox
+ * accounts (acc_sys_sandbox_source, acc_sys_fee_burn) are unused: there is no
+ * sandbox credit, only cash.
+ */
 export const SYSTEM_ACCOUNTS = {
-  sandbox_source: { id: 'acc_sys_sandbox_source', kind: 'available', klass: 'sandbox' },
   fee_revenue: { id: 'acc_sys_fee_revenue', kind: 'available', klass: 'cash' },
-  fee_burn: { id: 'acc_sys_fee_burn', kind: 'available', klass: 'sandbox' },
   stripe_clearing: { id: 'acc_sys_stripe_clearing', kind: 'available', klass: 'cash' },
   payout_clearing: { id: 'acc_sys_payout_clearing', kind: 'available', klass: 'cash' },
 } as const satisfies Record<string, { id: string; kind: LedgerKind; klass: LedgerClass }>;
@@ -112,15 +114,13 @@ export async function getOrCreateAccount(
   return created[0];
 }
 
-/** The four agent accounts, created on demand. */
+/** The agent's two cash accounts, created on demand. */
 export async function agentAccounts(agentId: string, client: DbClient = db) {
-  const [sandboxAvailable, sandboxHeld, cashAvailable, cashHeld] = await Promise.all([
-    getOrCreateAccount('agent', agentId, 'available', 'sandbox', client),
-    getOrCreateAccount('agent', agentId, 'held', 'sandbox', client),
+  const [cashAvailable, cashHeld] = await Promise.all([
     getOrCreateAccount('agent', agentId, 'available', 'cash', client),
     getOrCreateAccount('agent', agentId, 'held', 'cash', client),
   ]);
-  return { sandboxAvailable, sandboxHeld, cashAvailable, cashHeld };
+  return { cashAvailable, cashHeld };
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ export async function postTxn(client: DbClient, input: PostTxnInput): Promise<Po
     for (const account of locked) {
       const next = account.balanceMicros + (deltas.get(account.id) ?? 0n);
       if (account.ownerType === 'agent' && next < 0n) {
-        throw new AnsError('insufficient_credit', `Insufficient ${account.klass} credit`, {
+        throw new AnsError('insufficient_credit', 'Not enough money in the wallet', {
           details: {
             accountId: account.id,
             ownerId: account.ownerId,
@@ -213,7 +213,7 @@ export async function postTxn(client: DbClient, input: PostTxnInput): Promise<Po
             have: account.balanceMicros.toString(),
             need: (-(deltas.get(account.id) ?? 0n)).toString(),
           },
-          fix: { url: 'https://ans-registry.org/wallet', docs: 'https://ans-registry.org/docs/money', next: 'Top up cash credit at /wallet or use creditClass sandbox where the offer accepts it' },
+          fix: { url: 'https://ans-registry.org/wallet', docs: 'https://ans-registry.org/docs/money', next: 'Add money to the wallet at /wallet' },
         });
       }
     }
@@ -267,12 +267,7 @@ export interface ReceiptMoney {
 }
 
 function klassOf(r: ReceiptMoney): LedgerClass | null {
-  if (r.creditClass === 'sandbox' || r.creditClass === 'cash') return r.creditClass;
-  return null;
-}
-
-function feeAccountFor(klass: LedgerClass): string {
-  return klass === 'cash' ? SYSTEM_ACCOUNTS.fee_revenue.id : SYSTEM_ACCOUNTS.fee_burn.id;
+  return r.creditClass === 'cash' ? 'cash' : null;
 }
 
 /** Fee for a receipt with its frozen fee_bps (ceil). */
@@ -307,7 +302,7 @@ export async function hold(receipt: ReceiptMoney, client: DbClient = db): Promis
   });
 }
 
-/** release: client held -> provider available (price - fee), fee -> fee_revenue (cash) or fee_burn (sandbox). */
+/** release: client held -> provider available (price - fee), fee -> fee_revenue. */
 export async function release(receipt: ReceiptMoney, client: DbClient = db): Promise<PostedTxn | null> {
   if (!needsMoney(receipt)) return null;
   if (!receipt.clientId || !receipt.providerId) throw new AnsError('bad_request', 'Cannot release: both parties must be bound');
@@ -321,7 +316,7 @@ export async function release(receipt: ReceiptMoney, client: DbClient = db): Pro
       { accountId: held.id, amountMicros: -price },
       { accountId: providerAvailable.id, amountMicros: price - fee },
     ];
-    if (fee > 0n) entries.push({ accountId: feeAccountFor(klass), amountMicros: fee });
+    if (fee > 0n) entries.push({ accountId: SYSTEM_ACCOUNTS.fee_revenue.id, amountMicros: fee });
     return postTxn(tx, { type: 'release', refType: 'receipt', refId: receipt.id, idempotencyKey: `release:${receipt.id}`, actorAgentId: receipt.providerId, entries });
   });
 }
@@ -369,26 +364,8 @@ export async function split(receipt: ReceiptMoney, client: DbClient = db): Promi
     const entries: PostEntry[] = [{ accountId: held.id, amountMicros: -price }];
     if (providerShare > 0n) entries.push({ accountId: providerAvailable.id, amountMicros: providerShare });
     if (clientShare > 0n) entries.push({ accountId: clientAvailable.id, amountMicros: clientShare });
-    if (fee > 0n) entries.push({ accountId: feeAccountFor(klass), amountMicros: fee });
+    if (fee > 0n) entries.push({ accountId: SYSTEM_ACCOUNTS.fee_revenue.id, amountMicros: fee });
     return postTxn(tx, { type: 'split', refType: 'receipt', refId: receipt.id, idempotencyKey: `split:${receipt.id}`, actorAgentId: null, entries });
-  });
-}
-
-/** The $25 sandbox grant at registration: sandbox_source -> agent sandbox available. Idempotent per agent. */
-export async function grantSandbox(agentId: string, client: DbClient = db, amountMicros: bigint = SANDBOX_GRANT_MICROS): Promise<PostedTxn> {
-  return inTransaction(client, async (tx) => {
-    const available = await getOrCreateAccount('agent', agentId, 'available', 'sandbox', tx);
-    return postTxn(tx, {
-      type: 'grant',
-      refType: 'agent',
-      refId: agentId,
-      idempotencyKey: `grant:sandbox:${agentId}`,
-      actorAgentId: null,
-      entries: [
-        { accountId: SYSTEM_ACCOUNTS.sandbox_source.id, amountMicros: -amountMicros },
-        { accountId: available.id, amountMicros },
-      ],
-    });
   });
 }
 
@@ -397,20 +374,18 @@ export async function grantSandbox(agentId: string, client: DbClient = db, amoun
 // ---------------------------------------------------------------------------
 
 export interface Balances {
-  sandbox: { available: bigint; held: bigint };
   cash: { available: bigint; held: bigint };
 }
 
 export async function balances(agentId: string, client: DbClient = db): Promise<Balances> {
   const rows = await client.select().from(ledgerAccounts).where(and(eq(ledgerAccounts.ownerType, 'agent'), eq(ledgerAccounts.ownerId, agentId)));
-  const out: Balances = { sandbox: { available: 0n, held: 0n }, cash: { available: 0n, held: 0n } };
-  for (const r of rows) out[r.klass][r.kind] = r.balanceMicros;
+  const out: Balances = { cash: { available: 0n, held: 0n } };
+  for (const r of rows) if (r.klass === 'cash') out.cash[r.kind] = r.balanceMicros;
   return out;
 }
 
-export function serializeBalances(b: Balances): { sandbox: { available: string; held: string }; cash: { available: string; held: string } } {
+export function serializeBalances(b: Balances): { cash: { available: string; held: string } } {
   return {
-    sandbox: { available: b.sandbox.available.toString(), held: b.sandbox.held.toString() },
     cash: { available: b.cash.available.toString(), held: b.cash.held.toString() },
   };
 }

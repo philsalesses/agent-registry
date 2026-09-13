@@ -39,7 +39,7 @@ import type { Rail } from './rails';
  * the totals (capExceeded, negativeBalanceMicros).
  */
 
-export const CARD_TOPUPS_DISABLED_REASON = 'Card top-ups are not enabled yet. Sandbox credit works everywhere sandbox is accepted.';
+export const CARD_TOPUPS_DISABLED_REASON = 'Card payments are turned off on this registry, so wallets cannot be topped up by card.';
 
 export const STRIPE_REF_PAYMENT_INTENT = 'stripe_payment_intent';
 export const STRIPE_REF_CHECKOUT_SESSION = 'stripe_checkout_session';
@@ -55,7 +55,7 @@ function moneyFix(next?: string) {
 export function cardTopupsDisabledError(): AnsError {
   return new AnsError('not_implemented', CARD_TOPUPS_DISABLED_REASON, {
     status: 503,
-    fix: moneyFix('Use creditClass "sandbox" on receipts and invokes where the provider accepts sandbox'),
+    fix: moneyFix('Use free offers and unpaid receipts, or ask the registry operator to turn on card payments'),
   });
 }
 
@@ -121,8 +121,8 @@ export function buildCheckoutSessionParams(agentId: string, amountMicros: bigint
           currency: 'usd',
           unit_amount: microsToCents(quote.credit),
           product_data: {
-            name: `ANS cash credit ${formatUsd(quote.credit)}`,
-            description: `Prepaid credit for paid receipts and offers, added to the wallet of ${agentId}`,
+            name: `ANS wallet top-up ${formatUsd(quote.credit)}`,
+            description: `Money for paid jobs and services, added to the wallet of ${agentId}`,
           },
         },
       },
@@ -133,7 +133,7 @@ export function buildCheckoutSessionParams(agentId: string, amountMicros: bigint
           unit_amount: microsToCents(quote.surcharge),
           product_data: {
             name: 'Card processing surcharge',
-            description: `${surchargeLabel()}, so the full credit reaches the wallet`,
+            description: `${surchargeLabel()}, so the full amount reaches the wallet`,
           },
         },
       },
@@ -146,7 +146,7 @@ export function buildCheckoutSessionParams(agentId: string, amountMicros: bigint
       rail: 'stripe',
     },
     payment_intent_data: {
-      description: `ANS cash credit for ${agentId}`,
+      description: `ANS wallet top-up for ${agentId}`,
       metadata: { agentId, amountMicros: credit },
     },
     success_url: `${base}/wallet?topup=success&session_id={CHECKOUT_SESSION_ID}`,

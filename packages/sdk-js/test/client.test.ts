@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { feeForPrice } from 'ans-core';
 import { ANSClient, AgentIdentity, AnsApiError, hashOutput, type RegisterResult } from '../src';
-import { AgentTracker, mountedRoutes, startApi, suffix, type TestApi } from './helpers';
+import { AgentTracker, fundCash, mountedRoutes, startApi, suffix, type TestApi } from './helpers';
 
 // Decided before the suites are collected: the wallet router may still be a 501 stub
 const { wallet } = await mountedRoutes();
@@ -22,6 +22,7 @@ beforeAll(async () => {
   ({ client, res: clientReg } = await agents.register('sdk-client'));
   ({ client: provider, res: providerReg } = await agents.register('sdk-prov'));
   ({ client: third, res: thirdReg } = await agents.register('sdk-third'));
+  await fundCash(clientReg.agent.id);
 });
 
 afterAll(async () => {
@@ -35,7 +36,7 @@ describe('register', () => {
     expect(clientReg.agent.handle).toMatch(/^sdk-client-/);
     expect(clientReg.apiKey.key).toMatch(/^ak_[A-Za-z0-9_-]{32}$/);
     expect(clientReg.apiKey.scopes).toEqual(['read', 'receipts', 'invoke', 'publish']);
-    expect(clientReg.sandboxCredit).toBe('25000000');
+    expect('sandboxCredit' in clientReg).toBe(false);
     expect(clientReg.trust.score).toBe(50);
 
     const creds = clientReg.credentials;
@@ -58,14 +59,17 @@ describe('register', () => {
     expect(beat.status).toBe('ok');
   });
 
-  it.skipIf(!wallet)('grants $25 of sandbox credit, visible in the wallet and the ledger', async () => {
+  it.skipIf(!wallet)('registration grants no credit; a top-up shows in the wallet and the ledger', async () => {
+    const empty = await third.wallet();
+    expect(empty.cash).toEqual({ available: '0', held: '0' });
+    expect('sandbox' in empty).toBe(false);
     const w = await client.wallet();
     expect(w.agentId).toBe(clientReg.agent.id);
-    expect(w.sandbox.available).toBe('25000000');
+    expect(w.cash.available).toBe('25000000');
     const page = await client.ledger();
-    const grant = page.txns.find((t) => t.type === 'grant');
-    expect(grant?.refId).toBe(clientReg.agent.id);
-    expect(grant?.entries.find((e) => e.ownerId === clientReg.agent.id)?.amountMicros).toBe('25000000');
+    const topup = page.txns.find((t) => t.type === 'topup');
+    expect(topup?.refId).toBe(clientReg.agent.id);
+    expect(topup?.entries.find((e) => e.ownerId === clientReg.agent.id)?.amountMicros).toBe('25000000');
   });
 
   it('refuses to register an identity twice', async () => {
@@ -113,13 +117,12 @@ describe('a paid receipt from open to sealed', () => {
   const output = { themes: ['billing confusion', 'slow onboarding', 'missing export'], tickets: 40 };
   let receiptId = '';
 
-  it('opens a sandbox-priced receipt signed by the client', async () => {
+  it('opens a paid receipt signed by the client', async () => {
     const opened = await client.openReceipt({
       role: 'client',
       counterparty: providerReg.agent.handle!,
       task: '  Summarize 40 support tickets into themes  ',
       priceUsd: 2.5,
-      creditClass: 'sandbox',
     });
     receiptId = opened.receipt.id;
     expect(receiptId).toMatch(/^rc_/);
@@ -131,7 +134,7 @@ describe('a paid receipt from open to sealed', () => {
     expect(r.client?.id).toBe(clientReg.agent.id);
     expect(r.provider?.id).toBe(providerReg.agent.id);
     expect(r.priceMicros).toBe('2500000');
-    expect(r.creditClass).toBe('sandbox');
+    expect(r.creditClass).toBe('cash');
     expect(r.feeBps).toBe(50);
     expect(r.feeMicros).toBe(feeForPrice(2_500_000n, 50).toString());
     expect(r.termsHash).toBe(opened.terms.hash);
@@ -149,8 +152,8 @@ describe('a paid receipt from open to sealed', () => {
 
   it.skipIf(!wallet)('holds the price in escrow', async () => {
     const w = await client.wallet();
-    expect(w.sandbox.available).toBe('22500000');
-    expect(w.sandbox.held).toBe('2500000');
+    expect(w.cash.available).toBe('22500000');
+    expect(w.cash.held).toBe('2500000');
   });
 
   it('is delivered with the canonical output hash', async () => {
@@ -181,7 +184,7 @@ describe('a paid receipt from open to sealed', () => {
   it.skipIf(!wallet)('released escrow to the provider minus the fee', async () => {
     const w = await provider.wallet();
     const fee = feeForPrice(2_500_000n, 50);
-    expect(BigInt(w.sandbox.available)).toBe(25_000_000n + 2_500_000n - fee);
+    expect(BigInt(w.cash.available)).toBe(2_500_000n - fee);
   });
 
   it('verifies both agents\' receipt chains, signatures included', async () => {
@@ -266,16 +269,16 @@ describe('agent management, messages and errors', () => {
     const res = await third.updateAgent({
       description: 'Research agent',
       paymentMethods: [{ type: 'lightning', address: 'third@example.com' }],
-      policy: { minTrust: 10, acceptSandbox: false },
+      policy: { minTrust: 10 },
     });
     expect(res.agent.description).toBe('Research agent');
-    expect(res.policy).toEqual({ requireRegistered: false, minTrust: 10, acceptSandbox: false });
+    expect(res.policy).toEqual({ requireRegistered: false, minTrust: 10 });
     const profile = await client.getAgent(thirdReg.agent.handle!);
     expect(profile.policy.minTrust).toBe(10);
     expect(profile.agent.id).toBe(thirdReg.agent.id);
   });
 
-  it.skipIf(!wallet)('requests a payout (sandbox credit is never payout-eligible)', async () => {
+  it.skipIf(!wallet)('requests a payout (an empty wallet has nothing to pay out)', async () => {
     await expect(third.requestPayout(1, 0, 'first payout')).rejects.toMatchObject({ status: 402, code: 'insufficient_credit' });
     await expect(third.requestPayout('1.00', 3)).rejects.toMatchObject({ status: 400, code: 'validation_error' });
   });

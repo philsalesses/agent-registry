@@ -158,7 +158,7 @@ export const RECEIPT_CLOCK = {
 
 export type ReceiptRole = 'client' | 'provider';
 export type ReceiptVia = 'direct' | 'proxy';
-export type CreditClass = 'sandbox' | 'cash' | 'none';
+export type CreditClass = 'cash' | 'none';
 export type ReceiptCurrency = 'USD';
 export type ReceiptVerdict = 'accept' | 'reject';
 

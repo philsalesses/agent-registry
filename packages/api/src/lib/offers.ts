@@ -349,7 +349,6 @@ const publishInput = z
     examples: z.array(z.unknown()).optional(),
     tags: z.array(z.string().max(100)).max(50).optional(),
     priceMicros: priceInput.optional(),
-    acceptsSandbox: z.boolean().optional(),
     endpoint: z.string().max(2048).nullable().optional(),
     timeoutMs: z.number().int().min(MIN_TIMEOUT_MS).max(MAX_TIMEOUT_MS).optional(),
     requires: requiresInput.nullable().optional(),
@@ -370,7 +369,6 @@ export interface OfferDraft {
   examples: OfferExample[];
   tags: string[];
   priceMicros: bigint;
-  acceptsSandbox: boolean;
   endpoint: string | null;
   timeoutMs: number;
   requires: OfferRequires | null;
@@ -412,7 +410,6 @@ export async function buildDraft(owner: Pick<AgentRow, 'isHouse'>, body: unknown
     examples,
     tags,
     priceMicros: toPrice(b.priceMicros ?? '0'),
-    acceptsSandbox: b.acceptsSandbox ?? true,
     endpoint,
     timeoutMs: b.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     requires,
@@ -509,7 +506,6 @@ export async function publishOffer(owner: AgentRow, body: unknown, actor?: { id:
       tags: draft.tags,
       priceMicros: draft.priceMicros,
       priceUnit: 'call',
-      acceptsSandbox: draft.acceptsSandbox,
       endpoint: draft.endpoint,
       transport: draft.endpoint === null ? 'ans-house' : 'ans-http',
       mode: 'sync',
@@ -536,7 +532,6 @@ const patchInput = z
     description: z.string().max(2000).optional(),
     examples: z.array(z.unknown()).optional(),
     tags: z.array(z.string().max(100)).max(50).optional(),
-    acceptsSandbox: z.boolean().optional(),
     status: z.enum(['active', 'paused', 'retired']).optional(),
     timeoutMs: z.number().int().min(MIN_TIMEOUT_MS).max(MAX_TIMEOUT_MS).optional(),
     requires: requiresInput.nullable().optional(),
@@ -569,7 +564,6 @@ export async function updateOffer(owner: AgentRow, offer: OfferRow, body: unknow
     patch.examples = examples;
   }
   if (p.tags !== undefined) patch.tags = normalizeTags(p.tags);
-  if (p.acceptsSandbox !== undefined) patch.acceptsSandbox = p.acceptsSandbox;
   if (p.status !== undefined) patch.status = p.status;
   if (p.timeoutMs !== undefined) patch.timeoutMs = p.timeoutMs;
   if (p.requires !== undefined) patch.requires = normalizeRequires(p.requires);
@@ -970,7 +964,6 @@ export function toWireOfferSummary(row: OfferRow, owner: AgentRow): WireOfferSum
     description: row.description ?? '',
     tags: row.tags ?? [],
     priceMicros: row.priceMicros.toString(),
-    acceptsSandbox: row.acceptsSandbox,
     status: row.status,
     inputFields: topFields(row.inputSchema),
     outputFields: topFields(row.outputSchema),

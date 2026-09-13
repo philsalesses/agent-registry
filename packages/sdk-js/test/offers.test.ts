@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { canonicalHash } from 'ans-core';
 import { flushInvokeBackground, setInvokeForwarder } from '../../api/src/routes/invoke';
 import { ANSClient, AnsApiError, serve, type RegisterResult } from '../src';
-import { AgentTracker, listen, mountedRoutes, startApi, type TestApi } from './helpers';
+import { AgentTracker, fundCash, listen, mountedRoutes, startApi, type TestApi } from './helpers';
 
 /**
  * publishOffer, find, getOffer, invoke and hire against the real offers and
@@ -37,7 +37,9 @@ describe.skipIf(!live)('offers and invoke', () => {
     api = await startApi();
     agents = new AgentTracker(api.baseUrl);
     ({ client: provider, res: providerReg } = await agents.register('sdk-offer'));
-    ({ client: caller } = await agents.register('sdk-hirer'));
+    const hirer = await agents.register('sdk-hirer');
+    caller = hirer.client;
+    await fundCash(hirer.res.agent.id);
 
     // The provider's endpoint: serve() verifies the registry signature with the keys the API publishes
     const handle = serve<{ text: string }>(({ input }) => (lying ? { words: 'many' } : { words: input.text.split(/\s+/).filter(Boolean).length }), {
@@ -92,10 +94,10 @@ describe.skipIf(!live)('offers and invoke', () => {
   });
 
   it('invokes the offer through the registry and gets a delivered receipt', async () => {
-    const result = await caller.invoke<{ words: number }>(offerName, { text: 'one two three' }, { maxPriceUsd: 0.25, creditClass: 'sandbox' });
+    const result = await caller.invoke<{ words: number }>(offerName, { text: 'one two three' }, { maxPriceUsd: 0.25 });
     expect(result.output).toEqual({ words: 3 });
     expect(result.offer).toBe(offerName);
-    expect(result.charged).toEqual({ priceMicros: '250000', feeMicros: '1250', creditClass: 'sandbox' });
+    expect(result.charged).toEqual({ priceMicros: '250000', feeMicros: '1250', creditClass: 'cash' });
     expect(result.provider.id).toBe(providerReg.agent.id);
     const { receipt } = await caller.getReceipt(result.receiptId);
     expect(receipt.state).toBe('delivered');

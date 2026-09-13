@@ -167,7 +167,6 @@ export async function registerCommand(o: RegisterOptions, io: Io): Promise<numbe
   const configs = mcpConfigs(api);
   const profileUrl = typeof next.profileUrl === 'string' ? next.profileUrl : `${DEFAULT_WEB_URL}/agent/${creds.agentId}`;
   const skillUrl = typeof next.skillUrl === 'string' ? next.skillUrl : `${DEFAULT_WEB_URL}/skill.md`;
-  const sandbox = typeof res.sandboxCredit === 'string' ? res.sandboxCredit : null;
 
   if (o.json) {
     printJson(io, {
@@ -176,8 +175,6 @@ export async function registerCommand(o: RegisterOptions, io: Io): Promise<numbe
       handle: creds.handle,
       name,
       apiKey: creds.apiKey,
-      sandboxCredit: sandbox ? formatUsd(sandbox) : null,
-      sandboxCreditMicros: sandbox,
       profileUrl,
       credentialsPath: path,
       backupPath: backup,
@@ -195,7 +192,6 @@ export async function registerCommand(o: RegisterOptions, io: Io): Promise<numbe
       '',
       `  Profile:      ${profileUrl}`,
       `  API key:      ${creds.apiKey}  (shown once; also saved in the credentials file)`,
-      `  Credit:       ${sandbox ? formatUsd(sandbox) : '$25.00'} SANDBOX (not money)`,
       `  Credentials:  ${path}  (mode 600; the private key never leaves this file)`,
       ...(backup ? [`  Backup:       ${backup}`] : []),
       '',
@@ -242,10 +238,7 @@ export async function whoamiCommand(g: GlobalOptions, io: Io): Promise<number> {
   const counts = isRecord(profile.receiptCounts) ? profile.receiptCounts : {};
   const urls = isRecord(profile.urls) ? profile.urls : {};
   const balances = wallet
-    ? {
-        sandbox: { available: formatUsd(String((wallet.sandbox as Json | undefined)?.available ?? '0')), held: formatUsd(String((wallet.sandbox as Json | undefined)?.held ?? '0')) },
-        cash: { available: formatUsd(String((wallet.cash as Json | undefined)?.available ?? '0')), held: formatUsd(String((wallet.cash as Json | undefined)?.held ?? '0')) },
-      }
+    ? { available: formatUsd(String((wallet.cash as Json | undefined)?.available ?? '0')), held: formatUsd(String((wallet.cash as Json | undefined)?.held ?? '0')) }
     : null;
   const result = {
     agentId: agent.id,
@@ -270,7 +263,7 @@ export async function whoamiCommand(g: GlobalOptions, io: Io): Promise<number> {
       `@${String(agent.handle)} (${String(agent.id)}) ${String(agent.name)}`,
       `  trust        ${String(trust.score)} (confidence ${String(trust.confidence)}, rank ${String(trust.rank)})`,
       `  receipts     ${Number(counts.confirmed ?? 0)} confirmed, ${Number(counts.unreviewed ?? 0)} unreviewed, ${Number(counts.negative ?? 0)} negative, ${Number(counts.noReview ?? 0)} no review`,
-      ...(balances ? [`  wallet       SANDBOX ${balances.sandbox.available} (held ${balances.sandbox.held}), cash ${balances.cash.available} (held ${balances.cash.held})`] : []),
+      ...(balances ? [`  wallet       ${balances.available} (held ${balances.held})`] : []),
       `  cash cap     ${result.localCashCapPerDay} per day (spendCapUsdPerDay in the credentials file)`,
       `  profile      ${String(urls.profile ?? '')}`,
       `  credentials  ${path}`,
@@ -433,7 +426,7 @@ export async function findCommand(query: string | undefined, o: FindOptions, io:
   const offerRows = offers.map((x) => {
     const owner = isRecord(x.owner) ? x.owner : {};
     const trust = isRecord(owner.trust) ? owner.trust : {};
-    return { name: x.name, title: x.title, price: formatUsd(String(x.priceMicros ?? '0')), acceptsSandbox: x.acceptsSandbox, owner: owner.handle ?? owner.id, trust: trust.score ?? null };
+    return { name: x.name, title: x.title, price: formatUsd(String(x.priceMicros ?? '0')), owner: owner.handle ?? owner.id, trust: trust.score ?? null };
   });
   const agentRows = agents.map((a) => {
     const trust = isRecord(a.trust) ? a.trust : {};
@@ -445,7 +438,7 @@ export async function findCommand(query: string | undefined, o: FindOptions, io:
   }
   const lines: string[] = [];
   lines.push(offerRows.length ? `Offers for "${q}":` : `No offers for "${q}".`);
-  for (const r of offerRows) lines.push(`  ${String(r.name)}  ${r.price}${r.acceptsSandbox === false ? ' cash only' : ''}  ${String(r.title)}  (owner trust ${String(r.trust ?? '?')})`);
+  for (const r of offerRows) lines.push(`  ${String(r.name)}  ${r.price}  ${String(r.title)}  (owner trust ${String(r.trust ?? '?')})`);
   if (agentRows.length) {
     lines.push('', 'Agents:');
     for (const a of agentRows) lines.push(`  @${String(a.handle)} (${String(a.id)})  ${String(a.name)}  trust ${String(a.trust ?? '?')}`);

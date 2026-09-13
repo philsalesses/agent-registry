@@ -1,8 +1,6 @@
 /** Platform fee in basis points, frozen onto each receipt at open */
 export const FEE_BPS = 50;
 export const MICROS_PER_USD = 1_000_000n;
-/** Sandbox credit granted at registration: $25 */
-export const SANDBOX_GRANT_MICROS = 25_000_000n;
 /** Cash balance cap per agent: $500 */
 export const CASH_BALANCE_CAP_MICROS = 500_000_000n;
 /** Earned cash is payout-eligible after this many days */

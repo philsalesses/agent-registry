@@ -106,7 +106,7 @@ async function cleanupAgents(ids: string[]): Promise<void> {
   await deleteTestAgents(ids);
 }
 
-const WIRE_SUMMARY_KEYS = ['acceptsSandbox', 'description', 'id', 'inputFields', 'name', 'outputFields', 'owner', 'priceMicros', 'slug', 'stats', 'status', 'tags', 'title', 'urls', 'version'];
+const WIRE_SUMMARY_KEYS = ['description', 'id', 'inputFields', 'name', 'outputFields', 'owner', 'priceMicros', 'slug', 'stats', 'status', 'tags', 'title', 'urls', 'version'];
 const WIRE_OFFER_KEYS = [...WIRE_SUMMARY_KEYS, 'createdAt', 'endpointHost', 'examples', 'feeds', 'inputSchema', 'inputSchemaHash', 'mode', 'outputSchema', 'outputSchemaHash', 'probeOk', 'probedAt', 'requires', 'timeoutMs'];
 
 describe('lib/schemas', () => {

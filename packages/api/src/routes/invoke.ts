@@ -10,7 +10,7 @@ import { teach, withAns } from '../lib/errors';
 import { emitEvent } from '../lib/events';
 import { idempotencyKeyFrom, withIdempotency } from '../lib/idempotency';
 import { consume } from '../lib/ratelimit';
-import { assertSandboxAccepted, assertTrustFor, policyOf } from '../lib/policy';
+import { assertTrustFor } from '../lib/policy';
 import {
   agentRef,
   cashHeldTodayByKey,
@@ -63,7 +63,8 @@ const invokeInput = z
     offer: z.string().min(1).max(200),
     input: z.unknown(),
     maxPriceMicros: z.union([z.string().regex(/^\d{1,15}$/, 'must be a decimal string of USD micros'), z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)]).optional(),
-    creditClass: z.enum(['sandbox', 'cash']).optional(),
+    /** Paid calls are always cash; kept so clients that send it explicitly still validate */
+    creditClass: z.literal('cash').optional(),
     timeoutMs: z.number().int().min(MIN_TIMEOUT_MS).max(MAX_TIMEOUT_MS).optional(),
   })
   .strict();
@@ -181,10 +182,8 @@ export async function performInvoke(req: InvokeRequest): Promise<InvokeResult> {
 
   // 3. credit class, owner policy, price guard, spend cap
   const price = offer.priceMicros;
-  let creditClass: CreditClass = 'none';
-  if (price > 0n) creditClass = p.creditClass ?? (offer.acceptsSandbox && policyOf(owner).acceptSandbox ? 'sandbox' : 'cash');
+  const creditClass: CreditClass = price > 0n ? 'cash' : 'none';
   assertTrustFor(owner, caller);
-  if (price > 0n) assertSandboxAccepted(owner, creditClass, offer.acceptsSandbox);
   if (p.maxPriceMicros !== undefined && price > toMicros(p.maxPriceMicros)) {
     throw new AnsError('conflict', `The price of ${name} (${price} micros) is above maxPriceMicros (${toMicros(p.maxPriceMicros)})`, {
       details: { offer: name, priceMicros: price.toString(), maxPriceMicros: toMicros(p.maxPriceMicros).toString() },
@@ -201,7 +200,7 @@ export async function performInvoke(req: InvokeRequest): Promise<InvokeResult> {
         fix: {
           docs: 'https://ans-registry.org/docs/money',
           command: 'npx -y ans-mcp keys create --scopes invoke --cap-usd 5',
-          next: offer.acceptsSandbox ? 'Retry with "creditClass": "sandbox", or have your operator mint a key with a daily cash cap' : 'Have your operator mint a key with a daily cash cap, or sign the request with the agent key',
+          next: 'Have your operator mint a key with a daily cash cap, or sign the request with the agent key',
         },
       });
     }
@@ -223,12 +222,12 @@ export async function performInvoke(req: InvokeRequest): Promise<InvokeResult> {
   } catch (err) {
     if (err instanceof AnsError && err.code === 'insufficient_credit') {
       const d = (err.details ?? {}) as { have?: string; need?: string };
-      throw new AnsError('insufficient_credit', `You need ${price} micros of ${creditClass} credit to call ${name}`, {
-        details: { have: d.have ?? null, need: d.need ?? price.toString(), creditClass, offer: name, sandboxAccepted: offer.acceptsSandbox && policyOf(owner).acceptSandbox },
+      throw new AnsError('insufficient_credit', `You need ${price} micros in your wallet to call ${name}`, {
+        details: { have: d.have ?? null, need: d.need ?? price.toString(), creditClass, offer: name },
         fix: {
           url: 'https://ans-registry.org/wallet',
           docs: 'https://ans-registry.org/docs/money',
-          next: creditClass === 'cash' && offer.acceptsSandbox && policyOf(owner).acceptSandbox ? 'Retry with "creditClass": "sandbox", or top up cash at /wallet' : 'Top up at /wallet',
+          next: 'Add money to the wallet at /wallet',
         },
       });
     }

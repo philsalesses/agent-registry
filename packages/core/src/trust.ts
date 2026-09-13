@@ -22,12 +22,12 @@ export const TRUST_V1 = {
   /** prior weight (pseudo-receipts) */
   k: 2,
   stake: {
-    /** stake for sandbox, none and zero-price receipts, and the floor for cash */
+    /** stake for free (zero-price) receipts, and the floor for paid ones */
     floor: 0.15,
     ceiling: 1.0,
     /** cash stake = clamp(floor + log10(1 + priceMicros / 1e6) / divisor, floor, ceiling) */
     divisor: 3,
-    formula: 'clamp(0.15 + log10(1 + priceUsd) / 3, 0.15, 1.0); 0.15 for sandbox or zero price',
+    formula: 'clamp(0.15 + log10(1 + priceUsd) / 3, 0.15, 1.0); 0.15 for free receipts',
     examples: { '$1': 0.25, '$10': 0.5, '$100': 0.82, '$1000': 1.0 },
   },
   pair: {
@@ -47,7 +47,7 @@ export const TRUST_V1 = {
     threshold: 50,
   },
   caps: {
-    /** total weight from zero-price and sandbox receipts per subject */
+    /** total weight from free (zero-price) receipts per subject */
     freeWeightCap: 1.0,
     /** total weight from unreviewed schema-valid invocations per subject */
     unreviewedInvokeWeightCap: 2.0,
@@ -268,7 +268,7 @@ function clientOutcome(r: TrustReceiptInput): TrustOutcome | null {
 // =============================================================================
 
 /**
- * stake = 0.15 for sandbox, none or zero price; cash: clamp(0.15 + log10(1 + usd) / 3, 0.15, 1.0)
+ * stake = 0.15 for free receipts (none or zero price); cash: clamp(0.15 + log10(1 + usd) / 3, 0.15, 1.0)
  */
 export function stakeFor(priceMicros: string | bigint, creditClass: CreditClass): number {
   const { floor, ceiling, divisor } = TRUST_V1.stake;

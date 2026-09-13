@@ -17,8 +17,6 @@ export const AgentPolicySchema = z.object({
   requireRegistered: z.boolean().default(false),
   /** Refuse registered callers whose trust score is below this */
   minTrust: z.number().int().min(0).max(100).default(0),
-  /** Accept sandbox-class credit on this agent's offers */
-  acceptSandbox: z.boolean().default(true),
 });
 
 export const AgentTrustSchema = z.object({
@@ -234,7 +232,7 @@ export type ChallengeResponse = z.infer<typeof ChallengeResponseSchema>;
 /** USD micros as a decimal string (bigint safe over JSON) */
 export const MicrosStringSchema = z.string().regex(/^-?\d+$/);
 
-export const CreditClassSchema = z.enum(['sandbox', 'cash', 'none']);
+export const CreditClassSchema = z.enum(['cash', 'none']);
 export const ReceiptRoleSchema = z.enum(['client', 'provider']);
 export const ReceiptViaSchema = z.enum(['proxy', 'direct']);
 export const ReceiptStateSchema = z.enum([
@@ -300,7 +298,6 @@ export const OfferSchema = z.object({
   tags: z.array(z.string()).default([]),
   priceMicros: MicrosStringSchema.default('0'),
   priceUnit: z.literal('call').default('call'),
-  acceptsSandbox: z.boolean().default(true),
   endpoint: z.string().url().nullable().optional(),
   transport: z.literal('ans-http').default('ans-http'),
   mode: z.literal('sync').default('sync'),

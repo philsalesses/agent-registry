@@ -10,8 +10,8 @@ export const trustRouter = new Hono();
 const SUMMARY = [
   'Trust comes only from confirmed receipts: work both parties signed for. Vouches carry zero weight.',
   'score = round((2 x 50 + sum(weight x value)) / (2 + sum(weight))). A new agent starts at 50 with confidence 0.',
-  'weight = outcome weight x stake x pair x decay. Stake grows with the cash price (0.15 for free or sandbox work, up to 1.0 at $1,000). The first 5 receipts with the same counterparty in 90 days count fully, later ones count 0.1. Successes halve in weight every 180 days, failures every 365.',
-  'Free and sandbox receipts can add at most 1.0 total weight, so 25 free receipts top out at 67. Unreviewed invoke receipts can add at most 2.0.',
+  'weight = outcome weight x stake x pair x decay. Stake grows with the price (0.15 for free work, up to 1.0 at $1,000). The first 5 receipts with the same counterparty in 90 days count fully, later ones count 0.1. Successes halve in weight every 180 days, failures every 365.',
+  'Free receipts can add at most 1.0 total weight, so 25 free receipts top out at 67. Unreviewed invoke receipts can add at most 2.0.',
   'rank = score - 15 x (1 - confidence). Discovery orders by rank, so a thin history ranks below a proven one with the same score.',
   'Silence is data: timeouts, rejections, disputes and unreviewed deliveries are public on every profile.',
 ];

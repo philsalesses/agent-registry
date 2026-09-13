@@ -79,7 +79,7 @@ describe('house offers', () => {
     expect(rows).toHaveLength(HOUSE_OFFERS.length);
 
     for (const o of first.offers) {
-      expect(o).toMatchObject({ priceMicros: 0n, acceptsSandbox: true, transport: 'ans-house', endpoint: null, status: 'active', version: 1 });
+      expect(o).toMatchObject({ priceMicros: 0n, transport: 'ans-house', endpoint: null, status: 'active', version: 1 });
       const canonical = buildOfferPublishCanonical({ agentId: o.agentId, slug: o.slug, version: o.version, inputSchemaHash: o.inputSchemaHash, outputSchemaHash: o.outputSchemaHash, priceMicros: '0', endpoint: null }).canonical;
       expect(await verifyMessage(keys.publicKey, canonical, o.publishSig)).toBe(true);
     }

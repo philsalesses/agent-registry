@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
-  generateKeypair, toBase64, signRegistration, signRequest, signMessage, generateId, canonicalHash, SANDBOX_GRANT_MICROS,
+  generateKeypair, toBase64, signRegistration, signRequest, signMessage, generateId, canonicalHash,
 } from 'ans-core';
 import { createApp } from '../app';
 import { db } from '../db';
@@ -12,7 +12,7 @@ import { createTestAgent, deleteTestAgents, deleteRateLimitKeys, agentAccountIds
 
 /**
  * Route tests against the dev database through app.request(). Every test
- * cleans up what it creates; registration tests also purge the sandbox grant
+ * cleans up what it creates; registration tests also purge any ledger rows
  * they caused (the ledger is append-only, so the helper lifts the triggers).
  */
 
@@ -54,7 +54,7 @@ describe('POST /v1/agents (registration v2)', () => {
     await deleteRateLimitKeys(['register:ip:', 'global:unknown']);
   });
 
-  it('registers with proof of possession, mints an api key and grants $25 sandbox', async () => {
+  it('registers with proof of possession and mints an api key, with no credit', async () => {
     const handle = `reg-${suffix()}`;
     const { body: reg, publicKey } = await registrationBody(handle, { src: 'api' });
     const res = await app.request('/v1/agents', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(reg) });
@@ -69,7 +69,7 @@ describe('POST /v1/agents (registration v2)', () => {
     expect(json.apiKey.key).toMatch(/^ak_[A-Za-z0-9_-]{32}$/);
     expect(json.apiKey.scopes).toEqual(['read', 'receipts', 'invoke', 'publish']);
     expect(json.apiKey.spendCapMicrosPerDay).toBe('0');
-    expect(json.sandboxCredit).toBe(SANDBOX_GRANT_MICROS.toString());
+    expect(json.sandboxCredit).toBeUndefined();
     expect(json.next.mcpConfig).toEqual({ mcpServers: { ans: { command: 'npx', args: ['-y', 'ans-mcp'] } } });
     expect(json.next.remoteMcp.headers.Authorization).toBe(`Bearer ${json.apiKey.key}`);
     expect(json.next.remoteMcp.url).toMatch(/\/mcp$/);
@@ -77,8 +77,8 @@ describe('POST /v1/agents (registration v2)', () => {
     expect(json._ans.docs).toBeTruthy();
 
     const bal = await balances(json.agent.id);
-    expect(bal.sandbox.available).toBe(25_000_000n);
     expect(bal.cash.available).toBe(0n);
+    expect(bal.cash.held).toBe(0n);
 
     const keys = await db.select().from(apiKeys).where(eq(apiKeys.agentId, json.agent.id));
     expect(keys).toHaveLength(1);
@@ -175,7 +175,7 @@ describe('agent profile, policy, heartbeat, transfer, keys', () => {
     expect(json.receiptCounts).toEqual({ confirmed: 0, unconfirmed: 0, unreviewed: 0, negative: 0, noReview: 0 });
     expect(json.offers).toEqual([]);
     expect(json.vouches).toBe(0);
-    expect(json.policy).toEqual({ requireRegistered: false, minTrust: 0, acceptSandbox: true });
+    expect(json.policy).toEqual({ requireRegistered: false, minTrust: 0 });
     expect(json._ans.register).toBeTruthy();
 
     const list = await app.request('/v1/agents?sort=rank&limit=5');
@@ -193,7 +193,7 @@ describe('agent profile, policy, heartbeat, transfer, keys', () => {
     const res = await app.request(path, { method: 'PATCH', headers: await signed(agent, 'PATCH', path, body), body });
     expect(res.status).toBe(200);
     const json = await parse(res);
-    expect(json.policy).toEqual({ requireRegistered: true, minTrust: 40, acceptSandbox: true });
+    expect(json.policy).toEqual({ requireRegistered: true, minTrust: 40 });
     expect(json.agent.description).toBe('updated');
 
     const anon = await app.request(path, { method: 'PATCH', headers: JSON_HEADERS, body });
@@ -342,7 +342,7 @@ describe('vouches, messages, notifications', () => {
   });
 
   it('messages honour the recipient policy (403 trust_below_minimum) and accept signed senders', async () => {
-    await db.update(agents).set({ policy: { requireRegistered: true, minTrust: 60, acceptSandbox: true } }).where(eq(agents.id, subject.id));
+    await db.update(agents).set({ policy: { requireRegistered: true, minTrust: 60 } }).where(eq(agents.id, subject.id));
     const body = JSON.stringify({ toAgentId: `@${subject.handle}`, content: 'hello' });
     const blocked = await app.request('/v1/messages', { method: 'POST', headers: await signed(attester, 'POST', '/v1/messages', body), body });
     expect(blocked.status).toBe(403);
@@ -350,7 +350,7 @@ describe('vouches, messages, notifications', () => {
     expect(json.error).toBe('trust_below_minimum');
     expect(json.details).toMatchObject({ required: 60, actual: 50 });
 
-    await db.update(agents).set({ policy: { requireRegistered: false, minTrust: 0, acceptSandbox: true } }).where(eq(agents.id, subject.id));
+    await db.update(agents).set({ policy: { requireRegistered: false, minTrust: 0 } }).where(eq(agents.id, subject.id));
     const sent = await app.request('/v1/messages', { method: 'POST', headers: await signed(attester, 'POST', '/v1/messages', body), body });
     expect(sent.status).toBe(201);
 

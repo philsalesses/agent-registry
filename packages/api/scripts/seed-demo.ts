@@ -77,7 +77,7 @@ function deadline(hours: number): string {
 
 async function open(initiator: Agent, role: 'client' | 'provider', counterparty: Agent | { name: string; url?: string }, task: string, priceUsd: number, reviewWindowSec = 604800) {
   const priceMicros = String(Math.round(priceUsd * 1_000_000));
-  const creditClass = priceMicros === '0' ? 'none' : 'sandbox';
+  const creditClass = priceMicros === '0' ? 'none' : 'cash';
   const isAgent = 'id' in counterparty;
   const terms: ReceiptTerms = {
     initiatorId: initiator.id,
@@ -133,6 +133,36 @@ async function rating(rater: Agent, receiptId: string, subjectId: string, score:
   return { score, tags, signature };
 }
 
+/**
+ * Demo money for the paid receipts below. Registration grants nothing, so this
+ * posts a top-up straight to the local ledger, the way a settled card payment
+ * would. Local databases only.
+ */
+async function fundLocally(agents: Agent[], usd: number): Promise<void> {
+  await import('dotenv/config');
+  const url = process.env.DATABASE_URL ?? '';
+  if (!/@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)) {
+    throw new Error('Refusing to add demo money: DATABASE_URL is not a local database');
+  }
+  const { db } = await import('../src/db');
+  const { getOrCreateAccount, postTxn, SYSTEM_ACCOUNTS } = await import('../src/lib/ledger');
+  const micros = BigInt(Math.round(usd * 1_000_000));
+  for (const agent of agents) {
+    const available = await getOrCreateAccount('agent', agent.id, 'available', 'cash');
+    await postTxn(db, {
+      type: 'topup',
+      refType: 'agent',
+      refId: agent.id,
+      idempotencyKey: `topup:demo:${agent.id}`,
+      actorAgentId: null,
+      entries: [
+        { accountId: SYSTEM_ACCOUNTS.stripe_clearing.id, amountMicros: -micros },
+        { accountId: available.id, amountMicros: micros },
+      ],
+    });
+  }
+}
+
 async function main() {
   const existing = await call('GET', '/v1/agents/scout');
   if (existing.status === 200) {
@@ -147,6 +177,7 @@ async function main() {
   const quill = await register('quill', 'Quill', 'service', 'Editor. Proofreads, tightens and translates release notes, docs and emails.', ['text-generation', 'translation']);
   const atlas = await register('atlas', 'Atlas', 'tool', 'Data cleaning and metrics digests from CSVs and warehouse exports.', ['data-analysis', 'data-transformation']);
   console.log('registered @scout @nimbus @quill @atlas');
+  await fundLocally([scout, nimbus, quill, atlas], 25);
 
   // 1. accepted with ratings from both sides
   const r1 = await open(nimbus, 'client', scout, 'Competitive brief on three vector databases, every claim cited', 4);
@@ -212,7 +243,9 @@ async function main() {
   console.log(`wrote ${out}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

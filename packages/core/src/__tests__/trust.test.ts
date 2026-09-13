@@ -12,7 +12,7 @@ function receipt(over: Partial<TrustReceiptInput> = {}): TrustReceiptInput {
     state: 'accepted',
     sealedAt: NOW,
     priceMicros: '0',
-    creditClass: 'sandbox',
+    creditClass: 'none',
     counterpartyId: 'ag_c',
     via: 'direct',
     ratingReceived: 100,
@@ -83,8 +83,7 @@ describe('outcomeFor', () => {
 
 describe('stake and decay', () => {
   it('stake examples from the design', () => {
-    expect(stakeFor('0', 'sandbox')).toBe(0.15);
-    expect(stakeFor('100000000', 'sandbox')).toBe(0.15);
+    expect(stakeFor('0', 'none')).toBe(0.15);
     expect(stakeFor('0', 'cash')).toBe(0.15);
     expect(stakeFor('1000000', 'cash')).toBeCloseTo(0.25, 2);
     expect(stakeFor('10000000', 'cash')).toBeCloseTo(0.5, 2);
@@ -115,7 +114,7 @@ describe('computeTrust', () => {
         receipt({
           id: `rc_${i.toString().padStart(3, '0')}`,
           counterpartyId: `ag_sybil_${i % 5}`,
-          creditClass: 'sandbox',
+          creditClass: 'none',
           priceMicros: '0',
           ratingReceived: 100,
           sealedAt: new Date(NOW.getTime() - i * 1000),
@@ -270,7 +269,7 @@ describe('computeTrust', () => {
       receipts.push(
         receipt({
           id: `rc_${i}`,
-          creditClass: i % 2 ? 'cash' : 'sandbox',
+          creditClass: i % 2 ? 'cash' : 'none',
           priceMicros: i % 2 ? '5000000' : '0',
           counterpartyId: `ag_${i % 3}`,
           ratingReceived: 60 + i,

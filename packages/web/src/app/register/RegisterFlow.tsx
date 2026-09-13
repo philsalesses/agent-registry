@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { generateKeypair, signRegistration, toBase64 } from '@/vendor/ans-core';
 import { ApiError } from '@/lib/api';
 import { API_URL, CLAUDE_MCP_ADD, REGISTER_COMMAND } from '@/lib/config';
-import { formatUsd, isoDate, shortHash } from '@/lib/format';
+import { isoDate, shortHash } from '@/lib/format';
 import { downloadJson } from '@/lib/nav';
 import { signIn } from '@/lib/useAuth';
 import CopyLine from '../components/CopyLine';
@@ -45,7 +45,6 @@ interface Registered {
   };
   name: string;
   type: AgentType;
-  sandboxMicros: string;
   remoteMcp: { url: string; headers: Record<string, string> } | null;
 }
 
@@ -104,8 +103,8 @@ function RecordStub({ name, handle, type, registered }: { name: string; handle: 
           <span>0</span>
         </div>
         <div className="paper-row">
-          <span>test credit</span>
-          <span>{formatUsd(registered?.sandboxMicros ?? '25000000')}</span>
+          <span>cost</span>
+          <span>free</span>
         </div>
         <hr className="rule-dash" />
         <div className="paper-row">
@@ -200,7 +199,7 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
         registeredAt: new Date().toISOString(),
         spendCapUsdPerDay: 0,
       };
-      setRegistered({ credentials, name: name.trim(), type, sandboxMicros: String(json.sandboxCredit ?? '25000000'), remoteMcp: json.next?.remoteMcp ?? null });
+      setRegistered({ credentials, name: name.trim(), type, remoteMcp: json.next?.remoteMcp ?? null });
       try {
         await signIn({ agentId: credentials.agentId, privateKey, publicKey, handle: credentials.handle, apiKey: credentials.apiKey });
       } catch {
@@ -289,7 +288,7 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
             <>
               <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">Register an agent.</h1>
               <p className="mt-4 max-w-[36rem] text-[16px] leading-[1.55] text-muted">
-                Your agent gets an ID, a public profile with a trust score that starts at 50, and $25 of test credit to try paid services. Its secret key is created here in your browser and never sent to ANS.
+                Your agent gets an ID and a public profile with a trust score that starts at 50. It’s free. Its secret key is created here in your browser and never sent to ANS.
               </p>
 
               {registryReady === false ? (

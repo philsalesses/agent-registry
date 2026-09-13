@@ -300,7 +300,7 @@ export class ANSClient {
     return this.#request('GET', `/v1/agents/${seg(id)}`);
   }
 
-  /** PATCH /v1/agents/:id (signed): profile fields, status and policy {requireRegistered, minTrust, acceptSandbox} */
+  /** PATCH /v1/agents/:id (signed): profile fields, status and policy {requireRegistered, minTrust} */
   updateAgent(input: UpdateAgentInput): Promise<UpdateAgentResult> {
     const id = this.#selfId('updateAgent');
     return this.#request('PATCH', `/v1/agents/${seg(id)}`, { body: input, auth: 'required' });
@@ -424,7 +424,6 @@ export class ANSClient {
       examples: input.examples,
       tags: input.tags,
       priceMicros,
-      acceptsSandbox: input.acceptsSandbox,
       endpoint: input.endpoint,
       timeoutMs: input.timeoutMs,
       requires: input.requires,
@@ -444,7 +443,6 @@ export class ANSClient {
           : undefined;
     const body: Record<string, unknown> = { offer, input: input === undefined ? null : input };
     if (maxPriceMicros !== undefined) body.maxPriceMicros = maxPriceMicros;
-    if (options.creditClass) body.creditClass = options.creditClass;
     if (options.timeoutMs !== undefined) body.timeoutMs = options.timeoutMs;
     return this.#request('POST', '/v1/invoke', {
       body,
@@ -509,7 +507,7 @@ export class ANSClient {
     }
 
     const priceMicros = priceFrom(input);
-    const creditClass: CreditClass = priceMicros === '0' ? 'none' : (input.creditClass ?? 'sandbox');
+    const creditClass: CreditClass = priceMicros === '0' ? 'none' : 'cash';
     const deadline =
       input.deadlineAt !== undefined
         ? new Date(input.deadlineAt)
@@ -682,7 +680,7 @@ export class ANSClient {
   // Wallet
   // =========================================================================
 
-  /** GET /v1/wallet: sandbox and cash balances (available and held), payout eligibility, caps */
+  /** GET /v1/wallet: balances (available and held), payout eligibility, caps */
   wallet(): Promise<WireWallet> {
     return this.#request('GET', '/v1/wallet', { auth: 'required' });
   }

@@ -28,7 +28,6 @@ export interface WireReceiptCounts {
 export interface WirePolicy {
   requireRegistered: boolean;
   minTrust: number;
-  acceptSandbox: boolean;
 }
 
 /** The `_ans` block carried by public JSON responses */
@@ -59,7 +58,6 @@ export interface WireOfferSummary {
   description: string;
   tags: string[];
   priceMicros: string;
-  acceptsSandbox: boolean;
   status: 'active' | 'paused' | 'retired';
   /** Top-level property names of the input schema, required ones first */
   inputFields: string[];
@@ -190,7 +188,6 @@ export interface WireBalances {
 
 export interface WireWallet {
   agentId: string;
-  sandbox: WireBalances;
   cash: WireBalances;
   payoutEligibleMicros: string;
   caps: { cashBalanceMicros: string; payoutHoldDays: number };
@@ -204,7 +201,7 @@ export interface WireLedgerEntry {
   type: string;
   refType: string | null;
   refId: string | null;
-  klass: 'sandbox' | 'cash';
+  klass: 'cash';
   kind: 'available' | 'held';
   amountMicros: string;
   createdAt: string;

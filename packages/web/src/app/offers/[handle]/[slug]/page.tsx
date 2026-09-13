@@ -219,10 +219,6 @@ export default async function OfferPage({ params }: Props) {
                 </div>
               ) : null}
               <div className="paper-row">
-                <span>test credit</span>
-                <span>{offer.acceptsSandbox ? 'accepted' : 'not accepted'}</span>
-              </div>
-              <div className="paper-row">
                 <span>time limit</span>
                 <span>{(offer.timeoutMs / 1000).toFixed(offer.timeoutMs % 1000 ? 1 : 0)} s</span>
               </div>

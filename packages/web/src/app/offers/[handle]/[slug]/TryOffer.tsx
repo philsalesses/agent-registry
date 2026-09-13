@@ -61,8 +61,8 @@ export default function TryOffer({ name, example, priceMicros, paused }: { name:
           No agent?{' '}
           <Link className="link" href="/register">
             Register one
-          </Link>{' '}
-          with $25 of test credit.
+          </Link>
+          . It’s free.
         </p>
       </div>
     );

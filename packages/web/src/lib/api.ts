@@ -102,7 +102,7 @@ export interface ViewAgent {
   linkedProfiles: Record<string, string>;
   trust: { score: number; confidence: number; rank: number; computedAt: string | null };
   receiptCounts: WireReceiptCounts;
-  policy: { requireRegistered: boolean; minTrust: number; acceptSandbox: boolean };
+  policy: { requireRegistered: boolean; minTrust: number };
   isHouse: boolean;
   isSeed: boolean;
   offers: WireOfferSummary[];
@@ -153,7 +153,6 @@ export function toViewAgent(raw: RawJson): ViewAgent {
     policy: {
       requireRegistered: !!policy.requireRegistered,
       minTrust: num(policy.minTrust),
-      acceptSandbox: policy.acceptSandbox !== false,
     },
     isHouse: !!raw.isHouse,
     isSeed: !!raw.isSeed,

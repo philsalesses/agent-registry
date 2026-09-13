@@ -8,7 +8,7 @@ import type { AgentPolicy, ReceiptCounts, CreditClass, ReceiptRole, ReceiptVia, 
 export type ApiKeyScope = 'read' | 'receipts' | 'invoke' | 'publish';
 export const API_KEY_SCOPES: readonly ApiKeyScope[] = ['read', 'receipts', 'invoke', 'publish'];
 
-export const DEFAULT_AGENT_POLICY: AgentPolicy = { requireRegistered: false, minTrust: 0, acceptSandbox: true };
+export const DEFAULT_AGENT_POLICY: AgentPolicy = { requireRegistered: false, minTrust: 0 };
 
 
 // =============================================================================
@@ -375,7 +375,6 @@ export const offers = pgTable('offers', {
   tags: jsonb('tags').$type<string[]>().default([]).notNull(),
   priceMicros: bigint('price_micros', { mode: 'bigint' }).default(sql`0`).notNull(),
   priceUnit: text('price_unit').default('call').notNull(),
-  acceptsSandbox: boolean('accepts_sandbox').default(true).notNull(),
   endpoint: text('endpoint'),
   transport: text('transport').default('ans-http').notNull(),
   mode: text('mode').default('sync').notNull(),

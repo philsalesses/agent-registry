@@ -110,7 +110,6 @@ export interface OfferSearchResult {
   description: string | null;
   tags: string[];
   priceMicros: string;
-  acceptsSandbox: boolean;
   stats: OfferStats;
   owner: { id: string; handle: string | null; name: string; trust: ReturnType<typeof trustOf> };
   urls: { page: string; offer: string; mcp: string; skill: string; invoke: string };
@@ -147,7 +146,6 @@ export async function searchOffers(q: string, limit: number): Promise<OfferSearc
       description: offer.description,
       tags: offer.tags ?? [],
       priceMicros: offer.priceMicros.toString(),
-      acceptsSandbox: offer.acceptsSandbox,
       stats: offer.stats ?? {},
       owner: { id: owner.id, handle: owner.handle, name: owner.name, trust: trustOf(owner) },
       urls: {

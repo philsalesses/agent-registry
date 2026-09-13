@@ -2,17 +2,17 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Hono } from 'hono';
 import { requestId } from 'hono/request-id';
 import { desc, inArray, sql } from 'drizzle-orm';
-import { CASH_BALANCE_CAP_MICROS, PAYOUT_HOLD_DAYS, SANDBOX_GRANT_MICROS, generateApiKey, signRequest } from 'ans-core';
+import { CASH_BALANCE_CAP_MICROS, PAYOUT_HOLD_DAYS, generateApiKey, signRequest } from 'ans-core';
 import { db } from '../db';
 import { apiKeys, ledgerEntries, ledgerTxns, notifications, offers, payoutRequests } from '../db/schema';
 import { onError } from '../lib/errors';
 import { createSessionToken } from '../lib/auth';
-import { SYSTEM_ACCOUNTS, getOrCreateAccount, grantSandbox, postTxn, setLedgerFrozen } from '../lib/ledger';
+import { SYSTEM_ACCOUNTS, getOrCreateAccount, postTxn, setLedgerFrozen } from '../lib/ledger';
 import { SHORTFALL_FLAG_PREFIX, createStripeRail, type CheckoutSessionCreator } from '../lib/rails-stripe';
 import type { Rail } from '../lib/rails';
 import { createWalletRouter, walletRouter, type WalletRouterDeps } from '../routes/wallet';
 import { CHECKPOINTS_NOTE, createLedgerRouter } from '../routes/ledger';
-import { agentAccountIds, createTestAgent, deleteTestAgents, purgeLedger, body as parse, type TestAgent } from './helpers';
+import { agentAccountIds, createTestAgent, deleteTestAgents, fundCash, purgeLedger, TEST_FUND_MICROS, body as parse, type TestAgent } from './helpers';
 
 function testApp(wallet: Hono = walletRouter, ledger: Hono = createLedgerRouter({ cacheMs: 0 })) {
   const app = new Hono();
@@ -75,7 +75,7 @@ describe('wallet routes', () => {
     fresh = await createTestAgent('wallet-f');
     rich = await createTestAgent('wallet-r');
     agentIds.push(fresh.id, rich.id);
-    await grantSandbox(fresh.id);
+    await fundCash(fresh.id);
   });
 
   afterAll(async () => {
@@ -83,28 +83,28 @@ describe('wallet routes', () => {
     await cleanupAgents(agentIds);
   });
 
-  it('GET /v1/wallet shows a fresh agent its $25 sandbox grant in the WireWallet shape', async () => {
+  it('GET /v1/wallet shows a funded agent its balance in the WireWallet shape', async () => {
     const app = testApp();
     const res = await app.request('/v1/wallet', { headers: await sessionHeaders(fresh) });
     expect(res.status).toBe(200);
     const json = await parse(res);
     expect(json).toMatchObject({
       agentId: fresh.id,
-      sandbox: { available: SANDBOX_GRANT_MICROS.toString(), held: '0' },
-      cash: { available: '0', held: '0' },
+      cash: { available: TEST_FUND_MICROS.toString(), held: '0' },
       payoutEligibleMicros: '0',
       caps: { cashBalanceMicros: CASH_BALANCE_CAP_MICROS.toString(), payoutHoldDays: PAYOUT_HOLD_DAYS },
       topup: {
         enabled: false,
         packsMicros: ['20000000', '50000000', '100000000'],
-        reason: 'Card top-ups are not enabled yet. Sandbox credit works everywhere sandbox is accepted.',
+        reason: 'Card payments are turned off on this registry, so wallets cannot be topped up by card.',
       },
       manualPayouts: true,
       ledgerUrl: '/v1/wallet/ledger',
     });
-    expect(json.sandbox.available).toBe('25000000');
+    expect(json.cash.available).toBe('25000000');
+    expect(json.sandbox).toBeUndefined();
     expect(json._ans.docs).toBeTruthy();
-    expect(Object.keys(json).sort()).toEqual(['_ans', 'agentId', 'caps', 'cash', 'ledgerUrl', 'manualPayouts', 'payoutEligibleMicros', 'sandbox', 'topup'].sort());
+    expect(Object.keys(json).sort()).toEqual(['_ans', 'agentId', 'caps', 'cash', 'ledgerUrl', 'manualPayouts', 'payoutEligibleMicros', 'topup'].sort());
   });
 
   it('GET /v1/wallet accepts signed requests and api keys with scope read; refuses other keys and anonymous calls', async () => {
@@ -145,7 +145,7 @@ describe('wallet routes', () => {
     const json = await parse(res);
     expect(json.nextCursor).toBeNull();
     expect(json.txns).toHaveLength(1);
-    expect(json.txns[0]).toMatchObject({ type: 'grant', refType: 'agent', refId: fresh.id });
+    expect(json.txns[0]).toMatchObject({ type: 'topup', refType: 'agent', refId: fresh.id });
     expect(json.txns[0].entries.find((e: { ownerId: string }) => e.ownerId === fresh.id).amountMicros).toBe('25000000');
 
     const other = await app.request('/v1/wallet/ledger', { headers: await sessionHeaders(rich) });
@@ -170,7 +170,7 @@ describe('wallet routes', () => {
     expect(res.status).toBe(503);
     const json = await parse(res);
     expect(json.error).toBe('not_implemented');
-    expect(json.message).toBe('Card top-ups are not enabled yet. Sandbox credit works everywhere sandbox is accepted.');
+    expect(json.message).toBe('Card payments are turned off on this registry, so wallets cannot be topped up by card.');
     expect(json.fix.docs).toBeTruthy();
     expect(res.headers.get('Link')).toContain('rel="help"');
 
@@ -305,7 +305,7 @@ describe('wallet routes', () => {
     expect(cachedJson.generatedAt).toBe(json.generatedAt);
 
     // a new txn moves the chain head, so the snapshot is recomputed
-    const next = await grantSandbox(rich.id);
+    const next = await fundCash(rich.id);
     const again = await parse(await app.request('/v1/ledger/checkpoints'));
     expect(again.chain.checked).toBe(json.chain.checked + 1);
     expect(again.checkpoints[0].lastTxnId).toBe(next.txn.id);

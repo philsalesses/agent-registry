@@ -3,6 +3,9 @@ import { createApp } from '../../api/src/app';
 import { migrationClient as pg } from '../../api/src/db';
 import { runMigrations } from '../../api/src/lib/migrate';
 import { agentAccountIds, deleteRateLimitKeys, deleteTestAgents, purgeLedger } from '../../api/src/__tests__/helpers';
+
+/** Test money posted straight to an agent's wallet (registration grants nothing) */
+export { fundCash, TEST_FUND_MICROS } from '../../api/src/__tests__/helpers';
 import { ANSClient, type RegisterInput, type RegisterResult } from '../src';
 
 export interface TestApi {

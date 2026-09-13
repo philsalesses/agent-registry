@@ -40,7 +40,6 @@ interface PayoutRequest {
 }
 
 const TXN_WORDS: Record<string, string> = {
-  grant: 'test credit added',
   topup: 'top-up',
   hold: 'payment put on hold',
   release: 'held payment released',
@@ -130,9 +129,9 @@ export default function WalletPage() {
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-x-12">
         <div className="grid min-w-0 grid-cols-1 content-start gap-14 lg:col-span-8">
           <header>
-            <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">{wallet ? `${usdCents(BigInt(wallet.sandbox.available) + BigInt(wallet.cash.available))} to spend.` : 'Wallet'}</h1>
+            <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">{wallet ? `${usdCents(BigInt(wallet.cash.available))} to spend.` : 'Wallet'}</h1>
             <p className="mt-4 max-w-[36rem] text-[16px] leading-[1.55] text-muted">
-              Test credit pays for any service that accepts it, but it can’t be withdrawn. Money your agent earns from paid jobs can be paid out once it has been in the wallet for {wallet?.caps.payoutHoldDays ?? 14} days.
+              Your agent pays for services and jobs from this wallet, and money it earns lands here. Earnings can be paid out once they have been in the wallet for {wallet?.caps.payoutHoldDays ?? 14} days.
             </p>
             {error ? <p className="mt-4 text-[14px] text-bad">{error}</p> : null}
           </header>
@@ -170,7 +169,7 @@ export default function WalletPage() {
                         ) : (
                           nets.map((n) => (
                             <span key={n.klass} className={`block ${n.micros > 0n ? 'text-ok' : n.micros < 0n ? 'text-text' : 'text-dim'}`}>
-                              {signed(n.micros)} <span className="text-[12px] text-dim">{n.klass === 'sandbox' ? 'test credit' : 'money'}</span>
+                              {signed(n.micros)}
                             </span>
                           ))
                         )}
@@ -208,20 +207,11 @@ export default function WalletPage() {
               </div>
               <hr className="rule-dash" />
               <div className="paper-row">
-                <span>test credit</span>
-                <span className="!text-paper-ink">{wallet ? formatUsd(wallet.sandbox.available) : '...'}</span>
-              </div>
-              <div className="paper-row">
-                <span>test credit on hold</span>
-                <span>{wallet ? formatUsd(wallet.sandbox.held) : '...'}</span>
-              </div>
-              <hr className="rule-dash" />
-              <div className="paper-row">
-                <span>money</span>
+                <span>available</span>
                 <span className="!text-paper-ink">{wallet ? formatUsd(wallet.cash.available) : '...'}</span>
               </div>
               <div className="paper-row">
-                <span>money on hold</span>
+                <span>on hold for jobs</span>
                 <span>{wallet ? formatUsd(wallet.cash.held) : '...'}</span>
               </div>
               <div className="paper-row">
@@ -235,7 +225,7 @@ export default function WalletPage() {
               </div>
               <div className="paper-row">
                 <span>add money by card</span>
-                <span>{wallet ? (wallet.topup.enabled ? 'available' : 'not yet') : '...'}</span>
+                <span>{wallet ? (wallet.topup.enabled ? 'on' : 'off') : '...'}</span>
               </div>
             </div>
           </div>

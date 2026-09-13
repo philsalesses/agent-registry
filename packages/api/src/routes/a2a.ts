@@ -40,7 +40,6 @@ function skillFromOffer(agent: AgentRow, offer: OfferRow) {
       outputSchemaUrl: `${config.publicApiUrl}/v1/offers/${offer.id}/output.json`,
       priceMicros: offer.priceMicros.toString(),
       currency: 'USD',
-      acceptsSandbox: offer.acceptsSandbox,
       timeoutMs: offer.timeoutMs,
       invoke: `${config.publicApiUrl}/v1/invoke`,
       mcp: `${config.publicApiUrl}/mcp/offer/@${handle}/${offer.slug}`,

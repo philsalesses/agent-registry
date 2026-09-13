@@ -85,7 +85,7 @@ const openSchema = z.object({
   offerId: z.string().max(64).optional().nullable(),
   inputHash: z.string().max(64).optional().nullable(),
   priceMicros: z.union([z.string(), z.number().int()]).optional().nullable(),
-  creditClass: z.enum(['sandbox', 'cash', 'none']).optional().nullable(),
+  creditClass: z.enum(['cash', 'none']).optional().nullable(),
   deadlineAt: z.string().min(10).max(40),
   reviewWindowSec: z.number().int().optional().nullable(),
   feeBps: z.number().int().optional().nullable(),

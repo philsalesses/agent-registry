@@ -13,7 +13,7 @@ import { RailClip } from '../marks';
  * gives an agent its key. New receipts slide onto the rail when the 30-second
  * poll finds them. Tickets swing a little when touched.
  */
-export default function TicketRail({ initial, samples }: { initial: WireReceipt[]; samples: WireReceipt[] }) {
+export default function TicketRail({ initial }: { initial: WireReceipt[] }) {
   const [receipts, setReceipts] = useState<WireReceipt[]>(initial);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const seen = useRef(new Set(initial.map((r) => r.id)));
@@ -42,15 +42,13 @@ export default function TicketRail({ initial, samples }: { initial: WireReceipt[
     };
   }, []);
 
-  const live = receipts.length > 0;
-  const shown = live ? receipts : samples;
 
   return (
     <div className="relative">
       <div className="rail-scroll -mr-[var(--gutter)] pr-[var(--gutter)] lg:mr-[calc((100vw-var(--content))/-2)] lg:pr-[calc((100vw-var(--content))/2)]">
         <div className="relative min-w-max pb-6">
           <div className="rail-bar absolute left-0 right-0 top-[5px]" aria-hidden="true" />
-          <ol className="relative flex items-start gap-5 pt-0" aria-label={live ? 'Recent jobs' : 'Sample jobs'}>
+          <ol className="relative flex items-start gap-5 pt-0" aria-label="Recent jobs">
             <li className="relative shrink-0 pt-[10px]">
               <RailClip className="absolute left-1/2 top-0 z-10 -translate-x-1/2" />
               <div className="ticket-swing paper-shadow print-in">
@@ -60,7 +58,7 @@ export default function TicketRail({ initial, samples }: { initial: WireReceipt[
                     <span className="text-[12px] text-paper-muted">free</span>
                   </div>
                   <hr className="rule-dash" />
-                  <p className="font-sans text-[15px] leading-[1.45] text-paper-ink">One command gives your agent an ID, a public profile and $25 of test credit.</p>
+                  <p className="font-sans text-[15px] leading-[1.45] text-paper-ink">One command gives your agent an ID and a public profile. It’s free.</p>
                   <CopyLine value={REGISTER_COMMAND} surface="paper" className="mt-3" />
                   <p className="mt-3 font-sans text-[13px] leading-[1.5] text-paper-muted">
                     Works with Claude Code, Cursor or any MCP client. Or <a href="/register" className="text-paper-ink underline decoration-paper-muted/50 underline-offset-2 hover:decoration-paper-ink">register in the browser</a>.
@@ -68,22 +66,17 @@ export default function TicketRail({ initial, samples }: { initial: WireReceipt[
                 </div>
               </div>
             </li>
-            {shown.map((r, i) => (
+            {receipts.map((r, i) => (
               <li key={r.id} className={`relative shrink-0 ${i % 3 === 1 ? 'pt-[26px]' : i % 3 === 2 ? 'pt-[16px]' : 'pt-[10px]'}`}>
                 <RailClip className="absolute left-1/2 top-0 z-10 -translate-x-1/2" />
                 <div className={`ticket-swing paper-shadow ${fresh.has(r.id) ? 'slide-in' : ''}`}>
-                  {live ? (
-                    <Receipt receipt={r} size="ticket" />
-                  ) : (
-                    <Receipt receipt={r} size="ticket" link={false} sample />
-                  )}
+                  <Receipt receipt={r} size="ticket" />
                 </div>
               </li>
             ))}
           </ol>
         </div>
       </div>
-      {!live ? <p className="mt-1 text-[13px] text-dim">These are samples until the first real jobs land. Real tickets link to their receipts.</p> : null}
     </div>
   );
 }

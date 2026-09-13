@@ -6,7 +6,6 @@ import {
   ANS_LINKS,
   HANDLE_REGEX,
   RESERVED_HANDLES,
-  SANDBOX_GRANT_MICROS,
   AgentPolicySchema,
   fromBase64,
   generateApiKey,
@@ -24,7 +23,6 @@ import { config } from '../config';
 import { requireAgent, requireOwner, resolveAgent, type AgentRow } from '../lib/auth';
 import { jsonAns, teach } from '../lib/errors';
 import { clientIp, registerIpLimit } from '../lib/ratelimit';
-import { grantSandbox } from '../lib/ledger';
 import { validatePaymentMethods, sanitizeString } from '../utils/validation';
 
 /**
@@ -61,7 +59,7 @@ export function receiptCountsOf(a: Pick<AgentRow, 'receiptCounts'>): ReceiptCoun
 
 export function policyOf(a: Pick<AgentRow, 'policy'>): AgentPolicy {
   const p = { ...DEFAULT_AGENT_POLICY, ...(a.policy ?? {}) };
-  return { requireRegistered: !!p.requireRegistered, minTrust: Number(p.minTrust) || 0, acceptSandbox: p.acceptSandbox !== false };
+  return { requireRegistered: !!p.requireRegistered, minTrust: Number(p.minTrust) || 0 };
 }
 
 /** The agent as every public surface shows it. Never includes private data (there is none on the row). */
@@ -168,7 +166,7 @@ async function registrationsPaused(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
-// POST /v1/agents: registration v2 (proof of possession, handle, sandbox grant, api key)
+// POST /v1/agents: registration v2 (proof of possession, handle, api key)
 // ---------------------------------------------------------------------------
 
 const registerSchema = z.object({
@@ -277,8 +275,6 @@ agentsRouter.post('/', registerIpLimit(), async (c) => {
       updatedAt: now,
     }).returning();
 
-    await grantSandbox(id, tx);
-
     await tx.insert(apiKeys).values({
       id: minted.prefix,
       keyHash: minted.hash,
@@ -314,7 +310,6 @@ agentsRouter.post('/', registerIpLimit(), async (c) => {
       note: 'Shown once. Store it with your credentials; the registry keeps only its hash.',
     },
     trust: trustOf(agent),
-    sandboxCredit: SANDBOX_GRANT_MICROS.toString(),
     next: {
       mcpConfig: { mcpServers: { ans: { command: 'npx', args: ['-y', 'ans-mcp'] } } },
       remoteMcp: { url: `${config.publicApiUrl}/mcp`, headers: { Authorization: `Bearer ${minted.key}` } },
@@ -369,7 +364,6 @@ export interface OfferSummary {
   description: string | null;
   tags: string[];
   priceMicros: string;
-  acceptsSandbox: boolean;
   status: string;
   stats: OfferStats;
   probeOk: boolean | null;
@@ -395,7 +389,6 @@ export async function activeOfferSummaries(agent: Pick<AgentRow, 'id' | 'handle'
     description: o.description,
     tags: o.tags ?? [],
     priceMicros: o.priceMicros.toString(),
-    acceptsSandbox: o.acceptsSandbox,
     status: o.status,
     stats: o.stats ?? {},
     probeOk: o.probeOk,

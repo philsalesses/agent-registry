@@ -436,7 +436,7 @@ export async function assertHouseAllowance(callerId: string, now: Date = new Dat
 // ensureHouseAgent
 // ---------------------------------------------------------------------------
 
-type HouseFields = Pick<OfferRow, 'title' | 'description' | 'examples' | 'tags' | 'timeoutMs' | 'acceptsSandbox' | 'status' | 'publishSig' | 'transport' | 'endpoint' | 'priceMicros'>;
+type HouseFields = Pick<OfferRow, 'title' | 'description' | 'examples' | 'tags' | 'timeoutMs' | 'status' | 'publishSig' | 'transport' | 'endpoint' | 'priceMicros'>;
 
 function projection(o: HouseFields): string {
   return canonicalize({
@@ -445,7 +445,6 @@ function projection(o: HouseFields): string {
     examples: o.examples,
     tags: o.tags,
     timeoutMs: o.timeoutMs,
-    acceptsSandbox: o.acceptsSandbox,
     status: o.status,
     publishSig: o.publishSig,
     transport: o.transport,
@@ -502,7 +501,6 @@ export async function ensureHouseAgent(now: Date = new Date()): Promise<{ agent:
         examples: def.examples,
         tags: def.tags,
         priceMicros: '0',
-        acceptsSandbox: true,
         endpoint: null,
         timeoutMs: def.timeoutMs,
       });
@@ -516,7 +514,6 @@ export async function ensureHouseAgent(now: Date = new Date()): Promise<{ agent:
         examples: draft.examples,
         tags: draft.tags,
         timeoutMs: draft.timeoutMs,
-        acceptsSandbox: true,
         status: 'active' as const,
         publishSig,
         transport: 'ans-house',

@@ -41,7 +41,7 @@ export function registerRail(rail: Rail): void {
   registry.set(rail.id, rail);
 }
 
-/** The registered rail for `id`, or undefined when no implementation exists (lightning and usdc this sprint). */
+/** The registered rail for `id`, or undefined when no implementation exists (lightning and usdc have none). */
 export function getRail(id: string): Rail | undefined {
   return isRailId(id) ? registry.get(id) : undefined;
 }

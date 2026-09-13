@@ -8,7 +8,6 @@ import {
   stripeSurchargeFor,
   topupQuote,
   TOPUP_PACKS_MICROS,
-  SANDBOX_GRANT_MICROS,
   CASH_BALANCE_CAP_MICROS,
   MICROS_PER_USD,
   toMicros,
@@ -17,7 +16,6 @@ import {
 describe('money', () => {
   it('constants', () => {
     expect(FEE_BPS).toBe(50);
-    expect(SANDBOX_GRANT_MICROS).toBe(25_000_000n);
     expect(CASH_BALANCE_CAP_MICROS).toBe(500_000_000n);
     expect(TOPUP_PACKS_MICROS).toEqual([20_000_000n, 50_000_000n, 100_000_000n]);
   });

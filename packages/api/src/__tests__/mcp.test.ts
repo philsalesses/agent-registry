@@ -208,7 +208,8 @@ describe('Streamable HTTP MCP at /mcp', () => {
     expect(who.json.localCashCapPerDay).toBe('$0.00');
     const wallet = await callTool('ans_wallet', {}, { key: apiKey });
     expect(wallet.json.agentId).toBe(agentId);
-    expect(wallet.json.sandbox.available).toBe('$25.00');
+    expect(wallet.json.available).toBe('$0.00');
+    expect(wallet.json.sandbox).toBeUndefined();
   });
 
   it('ans_invoke calls the offer, then ans_receipt_verdict accepts it with a rating', async () => {

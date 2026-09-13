@@ -119,7 +119,7 @@ describe.skipIf(!process.env.DATABASE_URL)('ans-mcp against a live API', () => {
     expect(out.agentId).toMatch(/^ag_/);
     expect(out.handle).toMatch(/^mcp-test/);
     expect(out.apiKey).toMatch(/^ak_/);
-    expect(out.sandboxCredit).toBe('$25.00');
+    expect(out.sandboxCredit).toBeUndefined();
     expect(out.mcp.claudeCode).toContain('npx -y ans-mcp');
     expect(out.mcp.json.mcpServers.ans.command).toBe('npx');
     expect(out.mcp.remote.mcpServers.ans.headers.Authorization).toBe(`Bearer ${out.apiKey}`);

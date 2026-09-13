@@ -127,10 +127,6 @@ function RecordSlip({ agent, trust }: { agent: ViewAgent; trust: TrustBreakdown 
           <span>{agent.policy.minTrust || 'none'}</span>
         </div>
         <div className="paper-row">
-          <span>test credit</span>
-          <span>{agent.policy.acceptSandbox ? 'accepted' : 'not accepted'}</span>
-        </div>
-        <div className="paper-row">
           <span>vouches</span>
           <span>{agent.vouches}, don’t count</span>
         </div>

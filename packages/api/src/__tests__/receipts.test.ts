@@ -19,12 +19,12 @@ import { db } from '../db';
 import { agents, apiKeys, notifications, ratings, receiptEvents, receipts, ledgerTxns, funnelEvents } from '../db/schema';
 import { onError } from '../lib/errors';
 import { config } from '../config';
-import { balances, grantSandbox } from '../lib/ledger';
+import { balances } from '../lib/ledger';
 import { runClockTick } from '../lib/clock';
 import { floorSec, verifyAgentChain } from '../lib/receipts';
 import { receiptsRouter } from '../routes/receipts';
 import { agentReceiptsRouter } from '../routes/agent-receipts';
-import { createTestAgent, deleteTestAgents, agentAccountIds, purgeLedger, deleteRateLimitKeys, type TestAgent, body as parse } from './helpers';
+import { createTestAgent, deleteTestAgents, agentAccountIds, fundCash, purgeLedger, deleteRateLimitKeys, type TestAgent, body as parse } from './helpers';
 
 function testApp() {
   const app = new Hono();
@@ -64,6 +64,7 @@ interface OpenOpts {
   hint?: { name: string; url?: string | null; contact?: string | null };
   task?: string;
   priceMicros?: string;
+  /** 'sandbox' only to prove the API refuses it */
   creditClass?: 'sandbox' | 'cash' | 'none';
   reviewWindowSec?: number;
   openNonce?: string;
@@ -72,7 +73,7 @@ interface OpenOpts {
 
 async function openSigned(initiator: TestAgent, o: OpenOpts) {
   const priceMicros = o.priceMicros ?? '0';
-  const creditClass = priceMicros === '0' ? 'none' : (o.creditClass ?? 'sandbox');
+  const creditClass = (priceMicros === '0' ? 'none' : (o.creditClass ?? 'cash')) as ReceiptTerms['creditClass'];
   const terms: ReceiptTerms = {
     initiatorId: initiator.id,
     initiatorRole: o.role,
@@ -154,11 +155,11 @@ describe('receipts: direct flow', () => {
   beforeAll(async () => {
     client = await agent('rc-client');
     provider = await agent('rc-prov');
-    await grantSandbox(client.id);
+    await fundCash(client.id);
   });
 
   it('opens, accepts with escrow, delivers, accepts with ratings, releases with the 0.5% fee and seals both chains', async () => {
-    const opened = await openSigned(client, { role: 'client', counterpartyId: provider.id, priceMicros: '2000000', creditClass: 'sandbox' });
+    const opened = await openSigned(client, { role: 'client', counterpartyId: provider.id, priceMicros: '2000000', creditClass: 'cash' });
     expect(opened.res.status).toBe(201);
     const id = opened.json.receipt.id as string;
     expect(opened.json.receipt.state).toBe('proposed');
@@ -174,8 +175,8 @@ describe('receipts: direct flow', () => {
     expect(accJson.receipt.state).toBe('open');
     expect(accJson.receipt.confirmed).toBe(true);
     let b = await balances(client.id);
-    expect(b.sandbox.held).toBe(2_000_000n);
-    expect(b.sandbox.available).toBe(23_000_000n);
+    expect(b.cash.held).toBe(2_000_000n);
+    expect(b.cash.available).toBe(23_000_000n);
 
     const { res: delRes, outputHash } = await deliver(provider, id);
     expect(delRes.status).toBe(200);
@@ -189,9 +190,9 @@ describe('receipts: direct flow', () => {
     expect(vJson.receipt.hash).toMatch(/^[0-9a-f]{64}$/);
 
     const pb = await balances(provider.id);
-    expect(pb.sandbox.available).toBe(2_000_000n - 10_000n); // ceil(2_000_000 * 50 / 10000) = 10_000
+    expect(pb.cash.available).toBe(2_000_000n - 10_000n); // ceil(2_000_000 * 50 / 10000) = 10_000
     b = await balances(client.id);
-    expect(b.sandbox.held).toBe(0n);
+    expect(b.cash.held).toBe(0n);
 
     const rate = await signedReq(provider, 'POST', `/v1/receipts/${id}/rate`, await ratingBody(provider, id, client.id, 88));
     expect(rate.status).toBe(200);
@@ -273,7 +274,7 @@ describe('receipts: hints, policy and the clock', () => {
   beforeAll(async () => {
     a = await agent('rc-a');
     b = await agent('rc-b');
-    await grantSandbox(a.id);
+    await fundCash(a.id);
   });
 
   it('names an unregistered counterparty with a hint and lets a new agent claim it', async () => {
@@ -333,33 +334,32 @@ describe('receipts: hints, policy and the clock', () => {
     expect(list.receipts.map((r: { id: string }) => r.id)).not.toContain(id);
   });
 
-  it('428 for an unregistered counterparty id, 403 below minTrust, 409 for refused sandbox', async () => {
+  it('428 for an unregistered counterparty id, 403 below minTrust, 400 for sandbox credit', async () => {
     const unknown = await openSigned(a, { role: 'client', counterpartyId: 'ag_doesnotexist0000' });
     expect(unknown.res.status).toBe(428);
     expect(unknown.json.error).toBe('registration_required');
     expect(unknown.json.fix.command).toContain('ans-mcp register');
 
-    await db.update(agents).set({ policy: { requireRegistered: true, minTrust: 90, acceptSandbox: true } }).where(eq(agents.id, b.id));
+    await db.update(agents).set({ policy: { requireRegistered: true, minTrust: 90 } }).where(eq(agents.id, b.id));
     const low = await openSigned(a, { role: 'client', counterpartyId: b.id });
     expect(low.res.status).toBe(403);
     expect(low.json.error).toBe('trust_below_minimum');
     expect(low.json.details.required).toBe(90);
 
-    await db.update(agents).set({ policy: { requireRegistered: false, minTrust: 0, acceptSandbox: false } }).where(eq(agents.id, b.id));
+    await db.update(agents).set({ policy: { requireRegistered: false, minTrust: 0 } }).where(eq(agents.id, b.id));
     const sandbox = await openSigned(a, { role: 'client', counterpartyId: b.id, priceMicros: '1000000', creditClass: 'sandbox' });
-    expect(sandbox.res.status).toBe(409);
-    expect(sandbox.json.error).toBe('sandbox_not_accepted');
-    await db.update(agents).set({ policy: { requireRegistered: false, minTrust: 0, acceptSandbox: true } }).where(eq(agents.id, b.id));
+    expect(sandbox.res.status).toBe(400);
+    expect(sandbox.json.error).toBe('validation_error');
   });
 
   it('402 when the client cannot fund the price', async () => {
-    const opened = await openSigned(a, { role: 'client', counterpartyId: b.id, priceMicros: '999000000', creditClass: 'sandbox' });
+    const opened = await openSigned(a, { role: 'client', counterpartyId: b.id, priceMicros: '999000000', creditClass: 'cash' });
     expect(opened.res.status).toBe(402);
     expect(opened.json.error).toBe('insufficient_credit');
   });
 
   it('rejected and undisputed for 72 hours resolves for the client with a refund', async () => {
-    const opened = await openSigned(a, { role: 'client', counterpartyId: b.id, priceMicros: '1000000', creditClass: 'sandbox', task: 'Translate onboarding emails' });
+    const opened = await openSigned(a, { role: 'client', counterpartyId: b.id, priceMicros: '1000000', creditClass: 'cash', task: 'Translate onboarding emails' });
     const id = opened.json.receipt.id as string;
     await accept(b, id, opened.json.receipt.termsHash);
     const before = await balances(a.id);
@@ -374,12 +374,12 @@ describe('receipts: hints, policy and the clock', () => {
     expect(row.state).toBe('resolved_client');
     expect(row.hash).not.toBeNull();
     const after = await balances(a.id);
-    expect(after.sandbox.available).toBe(before.sandbox.available + 1_000_000n);
-    expect(after.sandbox.held).toBe(before.sandbox.held - 1_000_000n);
+    expect(after.cash.available).toBe(before.cash.available + 1_000_000n);
+    expect(after.cash.held).toBe(before.cash.held - 1_000_000n);
   });
 
   it('a delivery nobody reviews becomes unreviewed, releases, and seals only after the dispute window', async () => {
-    const opened = await openSigned(a, { role: 'client', counterpartyId: b.id, priceMicros: '500000', creditClass: 'sandbox', reviewWindowSec: 3600, task: 'Quick page summary' });
+    const opened = await openSigned(a, { role: 'client', counterpartyId: b.id, priceMicros: '500000', creditClass: 'cash', reviewWindowSec: 3600, task: 'Quick page summary' });
     const id = opened.json.receipt.id as string;
     await accept(b, id, opened.json.receipt.termsHash);
     await deliver(b, id, 'summary');
@@ -388,7 +388,7 @@ describe('receipts: hints, policy and the clock', () => {
     expect(row.state).toBe('unreviewed');
     expect(row.hash).toBeNull();
     const bb = await balances(b.id);
-    expect(bb.sandbox.available).toBeGreaterThanOrEqual(500_000n - 2_500n);
+    expect(bb.cash.available).toBeGreaterThanOrEqual(500_000n - 2_500n);
 
     await runClockTick(new Date(Date.now() + 8 * 86400_000));
     [row] = await db.select().from(receipts).where(eq(receipts.id, id));
@@ -438,8 +438,8 @@ describe('receipts: disputes and cancels', () => {
   it('provider disputes a rejection, then cancel rules apply', async () => {
     const c = await agent('rc-dc');
     const p = await agent('rc-dp');
-    await grantSandbox(c.id);
-    const opened = await openSigned(c, { role: 'client', counterpartyId: p.id, priceMicros: '1000000', creditClass: 'sandbox' });
+    await fundCash(c.id);
+    const opened = await openSigned(c, { role: 'client', counterpartyId: p.id, priceMicros: '1000000', creditClass: 'cash' });
     const id = opened.json.receipt.id as string;
     await accept(p, id, opened.json.receipt.termsHash);
     const { outputHash } = await deliver(p, id);
@@ -450,7 +450,7 @@ describe('receipts: disputes and cancels', () => {
     expect(d.status).toBe(200);
     expect((await parse(d)).receipt.state).toBe('disputed');
 
-    const opened2 = await openSigned(c, { role: 'client', counterpartyId: p.id, priceMicros: '1000000', creditClass: 'sandbox', task: 'cancel me' });
+    const opened2 = await openSigned(c, { role: 'client', counterpartyId: p.id, priceMicros: '1000000', creditClass: 'cash', task: 'cancel me' });
     const id2 = opened2.json.receipt.id as string;
     await accept(p, id2, opened2.json.receipt.termsHash);
     const before = await balances(c.id);
@@ -458,7 +458,7 @@ describe('receipts: disputes and cancels', () => {
     expect(cancel.status).toBe(200);
     expect((await parse(cancel)).receipt.state).toBe('cancelled_client');
     const after = await balances(c.id);
-    expect(after.sandbox.available).toBe(before.sandbox.available + 1_000_000n);
+    expect(after.cash.available).toBe(before.cash.available + 1_000_000n);
 
     const noAuth = await app.request(`/v1/receipts/${id2}/cancel`, { method: 'POST' });
     expect(noAuth.status).toBe(401);

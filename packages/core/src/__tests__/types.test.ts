@@ -15,9 +15,9 @@ describe('zod schemas', () => {
       policy: { requireRegistered: true },
       trust: { score: 50, confidence: 0, rank: 35 },
     });
-    expect(full.policy).toEqual({ requireRegistered: true, minTrust: 0, acceptSandbox: true });
+    expect(full.policy).toEqual({ requireRegistered: true, minTrust: 0 });
     expect(() => AgentIdSchema.parse({ ...legacy, handle: 'Bad Handle' })).toThrow();
-    expect(AgentPolicySchema.parse({})).toEqual({ requireRegistered: false, minTrust: 0, acceptSandbox: true });
+    expect(AgentPolicySchema.parse({})).toEqual({ requireRegistered: false, minTrust: 0 });
   });
 
   it('OfferSchema, ReceiptSchema, RatingSchema parse section 3 shapes', () => {

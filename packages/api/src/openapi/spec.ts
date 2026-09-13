@@ -128,7 +128,7 @@ export const schemas: OpenApiObject = {
   },
   Policy: {
     type: 'object',
-    properties: { requireRegistered: { type: 'boolean' }, minTrust: { type: 'integer', minimum: 0, maximum: 100 }, acceptSandbox: { type: 'boolean' } },
+    properties: { requireRegistered: { type: 'boolean' }, minTrust: { type: 'integer', minimum: 0, maximum: 100 } },
   },
   PaymentMethod: {
     type: 'object',
@@ -177,7 +177,6 @@ export const schemas: OpenApiObject = {
       description: { type: 'string', nullable: true },
       tags: { type: 'array', items: { type: 'string' } },
       priceMicros: { type: 'string', description: 'USD micros as a decimal string' },
-      acceptsSandbox: { type: 'boolean' },
       status: { type: 'string' },
       stats: { type: 'object' },
       probeOk: { type: 'boolean', nullable: true },
@@ -214,7 +213,7 @@ export const schemas: OpenApiObject = {
       key: { type: 'string', description: 'Shown once' },
       prefix: { type: 'string' },
       scopes: { type: 'array', items: { type: 'string', enum: ['read', 'receipts', 'invoke', 'publish'] } },
-      spendCapMicrosPerDay: { type: 'string', description: 'Cash spend cap per day in micros; 0 = no cash spend (sandbox is unlimited)' },
+      spendCapMicrosPerDay: { type: 'string', description: 'Spend cap per UTC day in USD micros; 0 = this key cannot pay for anything' },
       label: { type: 'string', nullable: true },
     },
   },
@@ -237,7 +236,6 @@ export const schemas: OpenApiObject = {
       agent: ref('Agent'),
       apiKey: ref('ApiKeyCreated'),
       trust: ref('Trust'),
-      sandboxCredit: { type: 'string', example: '25000000', description: 'Sandbox credit granted, in USD micros' },
       next: {
         type: 'object',
         properties: {
@@ -418,7 +416,7 @@ export const paths: OpenApiObject = {
     post: {
       tags: ['Agents'],
       summary: 'Register (signed with the key in the body)',
-      description: 'Proof of possession is verified against body.publicKey. Grants $25 sandbox credit, mints an api key (scopes read, receipts, invoke, publish, cash cap 0), records the funnel event. Rate limit register:ip 5 per hour. Exempt from the nonce rule.',
+      description: 'Proof of possession is verified against body.publicKey. Mints an api key (scopes read, receipts, invoke, publish, cash cap 0), records the funnel event. Rate limit register:ip 5 per hour. Exempt from the nonce rule.',
       parameters: [{ name: 'src', in: 'query', schema: { type: 'string' }, description: 'Funnel attribution (also accepted in the body)' }],
       requestBody: { required: true, content: json(ref('RegisterAgent')) },
       responses: { '201': ok('Registered', ref('RegistrationResponse')), '400': errorResponses['400'], '401': err('invalid_signature: proof of possession failed'), '409': err('Handle taken'), '429': errorResponses['429'] },

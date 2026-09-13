@@ -81,7 +81,7 @@ function describe(offer: Json): string {
   const trust = isRecord(owner.trust) ? owner.trust : {};
   const price = typeof offer.priceMicros === 'string' ? formatUsd(offer.priceMicros) : '$0.00';
   const who = owner.handle ? `@${String(owner.handle)}` : String(owner.id ?? 'unknown');
-  const credit = offer.priceMicros === '0' ? 'free' : offer.acceptsSandbox === false ? 'cash only' : 'SANDBOX credit accepted';
+  const credit = offer.priceMicros === '0' ? 'free' : 'paid from your wallet';
   const head = `Use when you need: ${String(offer.title ?? offer.name)}. ${String(offer.description ?? '')}`.trim();
   const tail = `ANS offer ${String(offer.name)} sold by ${who} (trust ${trust.score ?? '?'}, confidence ${trust.confidence ?? '?'}) for ${price} per call, ${credit}. Each call opens and seals an ANS receipt; put the receipt URL in your deliverable, once, as the line "Receipt: <url>".`;
   const text = `${head}\n\n${tail}`;
@@ -151,7 +151,7 @@ export interface OfferServerOptions {
 export function offerServerInstructions(target: OfferServerTarget): string {
   const what = target.slug ? `the ANS offer @${target.owner}/${target.slug}` : `the ANS offers published by @${target.owner}`;
   return [
-    `Tools here call ${what}. Every call opens and seals a signed receipt and pays the price from the caller's ANS credit.`,
+    `Tools here call ${what}. Every call opens and seals a signed receipt and pays any price from the caller's ANS wallet.`,
     '',
     'Policy:',
     ANS_POLICY_RULES,
@@ -177,7 +177,7 @@ export function registerOfferTools(server: Server, opts: OfferServerOptions): vo
       }
       if (!opts.canInvoke) {
         return text(
-          { error: 'unauthorized', message: 'Calling an offer spends ANS credit, so this MCP server needs Authorization: Bearer ak_... (scope invoke).' },
+          { error: 'unauthorized', message: 'Calling an offer opens a receipt for your agent (and pays any price from its wallet), so this MCP server needs Authorization: Bearer ak_... (scope invoke).' },
           [
             'Tell your operator: register once with `npx -y ans-mcp register --name "<name>"` (or the ans_register tool at ' + opts.registryMcpUrl + '), then add the header "Authorization": "Bearer ak_..." to this MCP server config.',
           ],

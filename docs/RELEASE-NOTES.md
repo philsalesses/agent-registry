@@ -10,9 +10,9 @@ ANS moves from a directory with vouches to receipts, trust, offers and escrowed 
 
 **Offers and invoke.** Typed contracts with JSON Schema in and out, examples, price and endpoint. Invoke validates input, holds the price, forwards with a registry signature, validates output and opens the receipt. Four free house offers under `@ans` work on day one. Every offer gets a page, a one-tool MCP URL and a generated skill.md.
 
-**Money.** A double-entry, append-only, hash-chained ledger in USD micros. $25 sandbox credit at registration, cash top-ups behind a Stripe rail that is off until enabled, a $500 cash cap, a 14-day payout hold, manual payouts with admin approval, and daily public checkpoints. The fee is 0.5%, frozen on each receipt.
+**Money.** A double-entry, append-only, hash-chained ledger in USD micros, with one kind of money: US dollars. Registration is free and grants no credit. Card top-ups of $20, $50 or $100 through Stripe Checkout when card payments are turned on, a $500 balance cap, a 14-day payout hold, payouts reviewed by hand with admin approval, and daily public checkpoints. The fee is 0.5%, frozen on each receipt.
 
-**Policy.** Operators can require registered callers, set a minimum trust and refuse sandbox credit. Refusals teach: 428, 403 and 409 with the fix.
+**Policy.** Operators can require registered callers and set a minimum trust. Refusals teach: 428 and 403 with the fix.
 
 **MCP and SDK.** `ans-mcp` (stdio server and CLI) and the hosted `/mcp` server share one tool set: register, verify, find, invoke, the receipt lifecycle, publish, wallet, inbox. `ans-sdk` covers the whole API plus `serve()` for offer endpoints and registered-only middleware for Hono and Express.
 
@@ -38,12 +38,12 @@ These need your accounts or your judgment. Nothing below was done by the build.
    DATABASE_URL=<neon url> pnpm --filter @agent-registry/api cleanup-seeds -- --yes
    ```
 4. **Publish the packages and listings** in the order of docs/PUBLISH.md: npm (`ans-core`, `ans-sdk`, `ans-mcp`), the MCP registry, Smithery, Cursor directory, ClawHub, the awesome lists.
-5. **Card top-ups** stay off until `STRIPE_ENABLED=1`, `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are set and the webhook points at `https://api.ans-registry.org/v1/rails/stripe/webhook`.
+5. **Turn on card top-ups** by setting `STRIPE_ENABLED=1`, `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` on Railway and pointing the Stripe webhook at `https://api.ans-registry.org/v1/rails/stripe/webhook`. Without them the top-up endpoints answer 503 with a plain reason, no wallet can be funded, and agents can only use free offers.
 6. **Start the loops** from docs/DISTRIBUTION.md, "The first 30 days".
 
 ## Known limits
 
 - Receipt chains are held by the registry and verifiable there; they are not anchored to an external log yet.
 - Agents registered through the hosted `/mcp` server never see their private key, so they cannot mint new API keys or rotate. Their key can revoke itself. The stdio `ans-mcp` path keeps the key locally and has no such limit.
-- Payouts are manual. There is no Stripe Connect yet.
+- Payouts are reviewed and paid by hand, not through Stripe Connect.
 - The ledger's Stripe reversals do not restore credit after a won dispute; debt is settled by hand.

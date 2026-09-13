@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
-import { AnsError, feeForPrice, SANDBOX_GRANT_MICROS } from 'ans-core';
+import { AnsError, feeForPrice } from 'ans-core';
 import { db } from '../db';
 import { ledgerAccounts, ledgerTxns } from '../db/schema';
 import {
@@ -9,7 +9,6 @@ import {
   release,
   refund,
   split,
-  grantSandbox,
   balances,
   ledgerFor,
   verifyChain,
@@ -21,7 +20,7 @@ import {
   assertLedgerOpen,
   type PostedTxn,
 } from '../lib/ledger';
-import { createTestAgent, deleteTestAgents, agentAccountIds, purgeLedger, type TestAgent } from './helpers';
+import { createTestAgent, deleteTestAgents, agentAccountIds, fundCash, purgeLedger, TEST_FUND_MICROS, type TestAgent } from './helpers';
 
 describe('ledger', () => {
   let client: TestAgent;
@@ -45,30 +44,30 @@ describe('ledger', () => {
     await deleteTestAgents([client.id, provider.id]);
   });
 
-  it('grants sandbox credit once (idempotent) and reports balances as bigint', async () => {
-    const first = track(await grantSandbox(client.id))!;
+  it('posts a top-up once (idempotent) and reports balances as bigint', async () => {
+    const first = track(await fundCash(client.id))!;
     expect(first.replayed).toBe(false);
-    const again = await grantSandbox(client.id);
+    const again = await fundCash(client.id);
     expect(again.replayed).toBe(true);
     expect(again.txn.id).toBe(first.txn.id);
     const b = await balances(client.id);
-    expect(b.sandbox.available).toBe(SANDBOX_GRANT_MICROS);
-    expect(typeof b.sandbox.available).toBe('bigint');
-    expect(b.cash.available).toBe(0n);
+    expect(b.cash.available).toBe(TEST_FUND_MICROS);
+    expect(typeof b.cash.available).toBe('bigint');
+    expect(b.cash.held).toBe(0n);
   });
 
   it('rejects unbalanced and zero entries before touching the database', async () => {
-    const acc = await getOrCreateAccount('agent', client.id, 'available', 'sandbox');
+    const acc = await getOrCreateAccount('agent', client.id, 'available', 'cash');
     await expect(
-      postTxn(db, { type: 'grant', idempotencyKey: `t:unbalanced:${client.id}`, entries: [{ accountId: SYSTEM_ACCOUNTS.sandbox_source.id, amountMicros: -5n }, { accountId: acc.id, amountMicros: 4n }] }),
+      postTxn(db, { type: 'grant', idempotencyKey: `t:unbalanced:${client.id}`, entries: [{ accountId: SYSTEM_ACCOUNTS.stripe_clearing.id, amountMicros: -5n }, { accountId: acc.id, amountMicros: 4n }] }),
     ).rejects.toThrow(/sum to zero/);
     await expect(
-      postTxn(db, { type: 'grant', idempotencyKey: `t:zero:${client.id}`, entries: [{ accountId: SYSTEM_ACCOUNTS.sandbox_source.id, amountMicros: 0n }, { accountId: acc.id, amountMicros: 0n }] }),
+      postTxn(db, { type: 'grant', idempotencyKey: `t:zero:${client.id}`, entries: [{ accountId: SYSTEM_ACCOUNTS.stripe_clearing.id, amountMicros: 0n }, { accountId: acc.id, amountMicros: 0n }] }),
     ).rejects.toThrow(/cannot be zero/);
   });
 
   it('refuses to take an agent account negative with 402 insufficient_credit', async () => {
-    const receipt = { id: `rc_test_${client.id}`, clientId: client.id, providerId: provider.id, priceMicros: SANDBOX_GRANT_MICROS + 1n, creditClass: 'sandbox' as const, feeBps: 300 };
+    const receipt = { id: `rc_test_${client.id}`, clientId: client.id, providerId: provider.id, priceMicros: TEST_FUND_MICROS + 1n, creditClass: 'cash' as const, feeBps: 300 };
     let err: unknown;
     try {
       await hold(receipt);
@@ -79,21 +78,21 @@ describe('ledger', () => {
     expect((err as AnsError).code).toBe('insufficient_credit');
     expect((err as AnsError).status).toBe(402);
     const b = await balances(client.id);
-    expect(b.sandbox.available).toBe(SANDBOX_GRANT_MICROS);
+    expect(b.cash.available).toBe(TEST_FUND_MICROS);
   });
 
-  it('hold -> release moves price minus fee to the provider and the fee to fee_burn (sandbox)', async () => {
+  it('hold -> release moves price minus fee to the provider and the fee to fee_revenue', async () => {
     const price = 1_234_567n; // odd number to exercise ceil rounding: fee = ceil(1234567 * 300 / 10000) = 37038
-    const receipt = { id: `rc_rel_${client.id}`, clientId: client.id, providerId: provider.id, priceMicros: price, creditClass: 'sandbox' as const, feeBps: 300 };
+    const receipt = { id: `rc_rel_${client.id}`, clientId: client.id, providerId: provider.id, priceMicros: price, creditClass: 'cash' as const, feeBps: 300 };
     const fee = feeForPrice(price, 300);
     expect(fee).toBe(37_038n);
 
-    const [burnBefore] = await db.select().from(ledgerAccounts).where(eq(ledgerAccounts.id, SYSTEM_ACCOUNTS.fee_burn.id));
+    const [revenueBefore] = await db.select().from(ledgerAccounts).where(eq(ledgerAccounts.id, SYSTEM_ACCOUNTS.fee_revenue.id));
 
     track(await hold(receipt));
     let b = await balances(client.id);
-    expect(b.sandbox.available).toBe(SANDBOX_GRANT_MICROS - price);
-    expect(b.sandbox.held).toBe(price);
+    expect(b.cash.available).toBe(TEST_FUND_MICROS - price);
+    expect(b.cash.held).toBe(price);
 
     // hold is idempotent per receipt
     const again = track(await release(receipt))!;
@@ -102,29 +101,29 @@ describe('ledger', () => {
     expect(replay!.replayed).toBe(true);
 
     b = await balances(client.id);
-    expect(b.sandbox.held).toBe(0n);
+    expect(b.cash.held).toBe(0n);
     const p = await balances(provider.id);
-    expect(p.sandbox.available).toBe(price - fee);
-    const [burnAfter] = await db.select().from(ledgerAccounts).where(eq(ledgerAccounts.id, SYSTEM_ACCOUNTS.fee_burn.id));
-    expect(burnAfter.balanceMicros - burnBefore.balanceMicros).toBe(fee);
+    expect(p.cash.available).toBe(price - fee);
+    const [revenueAfter] = await db.select().from(ledgerAccounts).where(eq(ledgerAccounts.id, SYSTEM_ACCOUNTS.fee_revenue.id));
+    expect(revenueAfter.balanceMicros - revenueBefore.balanceMicros).toBe(fee);
     expect(again.entries).toHaveLength(3);
     expect(again.entries.reduce((s, e) => s + e.amountMicros, 0n)).toBe(0n);
   });
 
   it('hold -> refund returns the full price to the client', async () => {
     const price = 500_000n;
-    const receipt = { id: `rc_ref_${client.id}`, clientId: client.id, providerId: provider.id, priceMicros: price, creditClass: 'sandbox' as const, feeBps: 300 };
+    const receipt = { id: `rc_ref_${client.id}`, clientId: client.id, providerId: provider.id, priceMicros: price, creditClass: 'cash' as const, feeBps: 300 };
     const before = await balances(client.id);
     track(await hold(receipt));
     track(await refund(receipt));
     const after = await balances(client.id);
-    expect(after.sandbox.available).toBe(before.sandbox.available);
-    expect(after.sandbox.held).toBe(0n);
+    expect(after.cash.available).toBe(before.cash.available);
+    expect(after.cash.held).toBe(0n);
   });
 
   it('hold -> split charges the fee on the whole and halves the remainder', async () => {
     const price = 1_000_001n; // fee = ceil(300.0003) = 30001; remainder 970000 -> 485000 each
-    const receipt = { id: `rc_split_${client.id}`, clientId: client.id, providerId: provider.id, priceMicros: price, creditClass: 'sandbox' as const, feeBps: 300 };
+    const receipt = { id: `rc_split_${client.id}`, clientId: client.id, providerId: provider.id, priceMicros: price, creditClass: 'cash' as const, feeBps: 300 };
     const fee = feeForPrice(price, 300);
     expect(fee).toBe(30_001n);
     const cBefore = await balances(client.id);
@@ -134,14 +133,14 @@ describe('ledger', () => {
     const cAfter = await balances(client.id);
     const pAfter = await balances(provider.id);
     const remainder = price - fee;
-    expect(pAfter.sandbox.available - pBefore.sandbox.available).toBe(remainder / 2n);
-    expect(cBefore.sandbox.available - cAfter.sandbox.available).toBe(price - (remainder - remainder / 2n));
-    expect(cAfter.sandbox.held).toBe(0n);
+    expect(pAfter.cash.available - pBefore.cash.available).toBe(remainder / 2n);
+    expect(cBefore.cash.available - cAfter.cash.available).toBe(price - (remainder - remainder / 2n));
+    expect(cAfter.cash.held).toBe(0n);
     expect(posted.entries.reduce((s, e) => s + e.amountMicros, 0n)).toBe(0n);
   });
 
   it('free receipts (price 0 or class none) post nothing', async () => {
-    expect(await hold({ id: 'rc_free', clientId: client.id, providerId: provider.id, priceMicros: 0n, creditClass: 'sandbox', feeBps: 300 })).toBeNull();
+    expect(await hold({ id: 'rc_free', clientId: client.id, providerId: provider.id, priceMicros: 0n, creditClass: 'cash', feeBps: 300 })).toBeNull();
     expect(await release({ id: 'rc_free', clientId: client.id, providerId: provider.id, priceMicros: 100n, creditClass: 'none', feeBps: 300 })).toBeNull();
   });
 
@@ -177,7 +176,7 @@ describe('ledger', () => {
     expect(clean.ok).toBe(true);
     expect(await isLedgerFrozen()).toBe(false);
 
-    const acc = await getOrCreateAccount('agent', provider.id, 'available', 'sandbox');
+    const acc = await getOrCreateAccount('agent', provider.id, 'available', 'cash');
     await db.update(ledgerAccounts).set({ balanceMicros: acc.balanceMicros + 1n }).where(eq(ledgerAccounts.id, acc.id));
     try {
       const bad = await reconcile();
@@ -186,7 +185,7 @@ describe('ledger', () => {
       expect(bad.mismatches.map((m) => m.accountId)).toContain(acc.id);
       expect(await isLedgerFrozen()).toBe(true);
       await expect(assertLedgerOpen()).rejects.toMatchObject({ code: 'ledger_frozen', status: 503 });
-      await expect(grantSandbox(provider.id)).rejects.toMatchObject({ code: 'ledger_frozen' });
+      await expect(fundCash(provider.id)).rejects.toMatchObject({ code: 'ledger_frozen' });
     } finally {
       await db.update(ledgerAccounts).set({ balanceMicros: acc.balanceMicros }).where(eq(ledgerAccounts.id, acc.id));
       await setLedgerFrozen(false);

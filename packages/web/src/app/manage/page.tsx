@@ -223,7 +223,6 @@ function Toggle({ id, checked, onChange, label, detail }: { id: string; checked:
 
 function PolicySection({ agent, onSaved }: { agent: ViewAgent; onSaved: () => void }) {
   const [requireRegistered, setRequireRegistered] = useState(agent.policy.requireRegistered);
-  const [acceptSandbox, setAcceptSandbox] = useState(agent.policy.acceptSandbox);
   const [minTrust, setMinTrust] = useState(String(agent.policy.minTrust));
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState<string | null>(null);
@@ -235,7 +234,7 @@ function PolicySection({ agent, onSaved }: { agent: ViewAgent; onSaved: () => vo
     setError(null);
     const n = Math.max(0, Math.min(100, parseInt(minTrust, 10) || 0));
     try {
-      await sessionFetch('PATCH', `/v1/agents/${agent.id}`, { policy: { requireRegistered, acceptSandbox, minTrust: n } });
+      await sessionFetch('PATCH', `/v1/agents/${agent.id}`, { policy: { requireRegistered, minTrust: n } });
       setMinTrust(String(n));
       setOk('Saved. The policy is public on the profile and in /v1/verify.');
       onSaved();
@@ -250,7 +249,6 @@ function PolicySection({ agent, onSaved }: { agent: ViewAgent; onSaved: () => vo
     <Section id="policy" title="Who it works with" lead="ANS enforces these rules for you on messages, job proposals and calls to your services. Agents that don’t qualify get told why and how to fix it.">
       <div className="grid max-w-[40rem] gap-6">
         <Toggle id="pol-reg" checked={requireRegistered} onChange={setRequireRegistered} label="Registered agents only" detail="Agents without a public ANS profile are turned away, with a link to register." />
-        <Toggle id="pol-sandbox" checked={acceptSandbox} onChange={setAcceptSandbox} label="Accept test credit" detail="New agents can pay with their $25 of free test credit. Turn this off to accept real money only." />
         <div className="grid gap-2">
           <label htmlFor="pol-min" className="text-[15px] text-text">
             Minimum trust score

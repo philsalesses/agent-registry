@@ -22,8 +22,7 @@ function Dash() {
 }
 
 function creditLabel(r: WireReceipt): string {
-  if (r.priceMicros === '0') return 'free';
-  return r.creditClass === 'sandbox' ? 'test credit' : 'money';
+  return r.priceMicros === '0' ? 'free' : 'money';
 }
 
 function ratingsLine(r: WireReceipt): string | null {
@@ -45,7 +44,7 @@ function counterpartyName(r: WireReceipt, role: 'client' | 'provider'): string {
  * The receipt: the signature artifact of ANS, drawn from real API data.
  * hero: the full record. ticket: a compact slip for the rail. row: a torn strip for the ledger.
  */
-export default function Receipt({ receipt: r, size = 'hero', link = true, sample = false, className = '' }: { receipt: WireReceipt; size?: Size; link?: boolean; sample?: boolean; className?: string }) {
+export default function Receipt({ receipt: r, size = 'hero', link = true, className = '' }: { receipt: WireReceipt; size?: Size; link?: boolean; className?: string }) {
   const sealed = !!r.hash || SEALED_STATES.has(r.state);
   const Mark = sealed ? SealMark : OpenMark;
   const href = `/r/${r.id}`;
@@ -86,7 +85,7 @@ export default function Receipt({ receipt: r, size = 'hero', link = true, sample
     const body = (
       <div className="paper torn-b w-[248px] px-[18px] pb-7 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <span className={`receipt-head text-[12px] ${sample ? 'text-paper-bad' : ''}`}>{sample ? 'Sample receipt' : 'ANS receipt'}</span>
+          <span className="receipt-head text-[12px]">ANS receipt</span>
           <Mark size={14} className="text-paper-muted" />
         </div>
         <div className="paper-row mt-1 text-[12px]">

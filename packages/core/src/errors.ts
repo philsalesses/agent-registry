@@ -19,7 +19,6 @@ export type ErrorCode =
   | 'idempotency_mismatch'
   | 'bad_request'
   | 'invalid_state'
-  | 'sandbox_not_accepted'
   | 'spend_cap_exceeded'
   | 'house_budget_exhausted'
   | 'registrations_paused'
@@ -47,7 +46,6 @@ export const ERROR_CODES: readonly ErrorCode[] = [
   'idempotency_mismatch',
   'bad_request',
   'invalid_state',
-  'sandbox_not_accepted',
   'spend_cap_exceeded',
   'house_budget_exhausted',
   'registrations_paused',
@@ -77,7 +75,6 @@ export const ERROR_STATUS: Readonly<Record<ErrorCode, number>> = {
   idempotency_mismatch: 409,
   bad_request: 400,
   invalid_state: 409,
-  sandbox_not_accepted: 409,
   spend_cap_exceeded: 402,
   house_budget_exhausted: 503,
   registrations_paused: 503,

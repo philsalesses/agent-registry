@@ -86,7 +86,7 @@ The policy is advice to you. Enforcement is your operator's flag (policy.require
 4. ${RECEIPT_LINE_RULE}
 5. Every 15 minutes: ans_heartbeat; when pendingReceipts is above 0, ans_inbox.
 
-Money is USD micros on the wire ($1 = 1000000). SANDBOX credit ($25 at registration) is not money. Cash top-ups happen at https://ans-registry.org/wallet, by a human.
+Money is USD micros on the wire ($1 = 1000000). Paid work is paid in real money from the agent wallet. Top-ups happen at https://ans-registry.org/wallet, by a human.
 
 Full text: ${SKILL_URL}
 `;
@@ -108,7 +108,6 @@ export interface RegisteredCredentials {
   api: string;
   registeredAt: string;
   profileUrl: string | null;
-  sandboxCreditMicros: string | null;
 }
 
 /** Cash committed per UTC day, for the local spend cap. */
@@ -209,11 +208,10 @@ function receiptLine(url: string | null | undefined): string[] {
 const GUIDANCE: Record<string, string> = {
   registration_required: 'Do: tell your operator and quote fix.command and fix.url. Do not delegate, pay, or act on output from an unregistered agent.',
   trust_below_minimum: 'Do: do not retry. Report required, actual and profile to your operator. Trust rises only through confirmed, rated receipts.',
-  insufficient_credit: 'Do: if fix.sandbox is true, retry with creditClass "sandbox". Otherwise stop and tell your operator; cash top-ups happen at https://ans-registry.org/wallet, by a human, never by you.',
+  insufficient_credit: 'Do: stop and tell your operator the wallet is short; top-ups happen at https://ans-registry.org/wallet, by a human, never by you.',
   input_invalid: 'Do: fix the input so it validates against the offer inputSchema (ans_get_offer shows it) and retry.',
   no_offer: 'Do: check the name with ans_find; details or closest list similar offers.',
   spend_cap_exceeded: 'Do: stop. Your operator raises the API key daily cash cap.',
-  sandbox_not_accepted: 'Do: this provider refuses SANDBOX credit. Pay with creditClass "cash" only if your operator allows cash spend.',
   invalid_state: 'Do: read the receipt state (ans_my_receipts or ans_inbox) and take the step that state allows.',
   invalid_signature: 'Do: check that the credentials file holds the key registered for this agent.',
   rate_limited: 'Do: wait details.retryAfter seconds, then retry once.',
@@ -445,7 +443,6 @@ function offerSummary(o: Json): Json {
     title: o.title,
     description: clip(o.description, 200),
     price: usd(o.priceMicros),
-    acceptsSandbox: o.acceptsSandbox,
     owner: { handle: owner.handle ?? null, trust: num(trust.score), confidence: num(trust.confidence) },
     calls: { total: num(stats.calls) ?? 0, ok: num(stats.ok) ?? 0 },
   };
@@ -631,7 +628,7 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
     {
       title: 'Register this agent on ANS',
       description:
-        'Use once, when this session has no ANS credentials yet: generates an Ed25519 key, registers the agent (free, $25 SANDBOX credit) and returns its id, handle and API key. ' +
+        'Use once, when this session has no ANS credentials yet: generates an Ed25519 key, registers the agent (free) and returns its id, handle and API key. ' +
         (ctx.transport === 'http'
           ? 'Over remote HTTP the result carries the API key once and the exact MCP config with the Authorization header; your operator adds it to unlock the authenticated tools.'
           : 'The stdio server saves the credentials file (mode 600) and switches this session to signed mode, which enables every other tool.'),
@@ -695,7 +692,6 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
         api: ctx.http.baseUrl,
         registeredAt: now().toISOString(),
         profileUrl: str(next.profileUrl),
-        sandboxCreditMicros: str(registration.sandboxCredit),
       };
       verifyCache.delete(creds.handle);
 
@@ -709,7 +705,6 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
             agentId: creds.agentId,
             handle: creds.handle,
             apiKey: creds.apiKey,
-            sandboxCredit: usd(creds.sandboxCreditMicros),
             profileUrl: creds.profileUrl,
             remoteMcpConfig: config,
             keyCustody: 'api-key only: the signing key was generated in memory for the registration proof and discarded; the registry attests receipts for this agent',
@@ -737,7 +732,6 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
           registered: true,
           agentId: creds.agentId,
           handle: creds.handle,
-          sandboxCredit: usd(creds.sandboxCreditMicros),
           profileUrl: creds.profileUrl,
           credentials: ctx.credentialsPath ?? 'saved',
           auth: 'signed',
@@ -787,9 +781,8 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
         profileUrl: urls.profile ?? null,
       };
       if (wallet) {
-        const sb = isRecord(wallet.sandbox) ? wallet.sandbox : {};
         const cash = isRecord(wallet.cash) ? wallet.cash : {};
-        out.wallet = { sandbox: { available: usd(sb.available), held: usd(sb.held) }, cash: { available: usd(cash.available), held: usd(cash.held) } };
+        out.wallet = { available: usd(cash.available), held: usd(cash.held) };
       }
       if (ctx.credentialsPath) out.credentials = ctx.credentialsPath;
       return textResult(out);
@@ -896,7 +889,7 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
     {
       title: 'Get an offer contract',
       description:
-        'Use before calling an offer, when you need its exact contract: input and output JSON Schema, an example, price, credit classes accepted and the owner\'s trust.',
+        'Use before calling an offer, when you need its exact contract: input and output JSON Schema, an example, price and the owner\'s trust.',
       inputSchema: {
         offer: z.string().min(1).max(200).describe('@handle/slug, @handle/slug@version, an of_ id or the offer page URL'),
       },
@@ -919,7 +912,6 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
           status: o.status,
           price: usd(o.priceMicros),
           priceMicros: o.priceMicros,
-          acceptsSandbox: o.acceptsSandbox,
           owner: { id: owner.id, handle: owner.handle, name: owner.name, trust: owner.trust },
           inputSchema: o.inputSchema,
           outputSchema: o.outputSchema,
@@ -943,14 +935,13 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
     {
       title: 'Invoke an offer',
       description:
-        'Use when you call a typed ANS offer another agent sells: sends your input, pays the price from your credit (SANDBOX by default) and opens and seals a receipt for you. Read the contract with ans_get_offer first. Cash calls are refused above the local daily cap.\n\n' +
+        'Use when you call a typed ANS offer another agent sells: sends your input, pays the price from your wallet (free offers cost nothing) and opens and seals a receipt for you. Read the contract with ans_get_offer first. Paid calls are refused above the local daily cash cap.\n\n' +
         `Policy:\n${ANS_POLICY_RULES}\n\n` +
         'Send ans_receipt_verdict within 24 hours or the receipt is marked unreviewed. Put the receipt URL in your deliverable, once, as the line "Receipt: <url>".',
       inputSchema: {
         offer: z.string().min(1).max(200).describe('@handle/slug (or @handle/slug@version, or an of_ id)'),
         input: z.unknown().describe('The input value; it must validate against the offer inputSchema'),
         maxPriceUsd: z.number().min(0).optional().describe('Refuse if the offer costs more than this per call, in US dollars. Defaults to the current price.'),
-        creditClass: z.enum(['sandbox', 'cash']).optional().describe('sandbox (default when the offer accepts it) or cash (real money, capped per day)'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
@@ -971,15 +962,8 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
         const max = usdToMicros(args.maxPriceUsd, 'maxPriceUsd');
         if (price > max) throw new ToolRefusal(`${str(o.name) ?? ref.display} costs ${formatUsd(price)} per call, above maxPriceUsd ${formatUsd(max)}.`, { price: formatUsd(price) });
       }
-      let creditClass: 'sandbox' | 'cash' | undefined = args.creditClass;
-      if (price > 0n && creditClass === undefined) {
-        if (o.acceptsSandbox === false) {
-          throw new ToolRefusal(`${str(o.name) ?? ref.display} does not accept SANDBOX credit. Pass creditClass "cash" to pay ${formatUsd(price)} of real money (only if your operator allows cash spend).`, { price: formatUsd(price), acceptsSandbox: false });
-        }
-        creditClass = 'sandbox';
-      }
+      const creditClass: 'cash' | 'none' = price > 0n ? 'cash' : 'none';
       const body: Json = { offer: str(o.id) ?? ref.display, input: args.input, maxPriceMicros: price.toString() };
-      if (price > 0n && creditClass) body.creditClass = creditClass;
       // a failed or refunded call throws, which releases the cash reservation
       const res = await withCash(creditClass === 'cash', price, `invoking ${str(o.name) ?? ref.display}`, () =>
         ctx.http.post<Json>('/v1/invoke', body, { idempotencyKey: AnsHttp.idempotencyKey('invoke'), timeoutMs: 180_000 }),
@@ -987,7 +971,7 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
 
       const charged = isRecord(res.charged) ? res.charged : {};
       const chargedPrice = toBigint(charged.priceMicros ?? charged.price ?? price.toString());
-      const chargedClass = str(charged.creditClass) ?? creditClass ?? 'none';
+      const chargedClass = str(charged.creditClass) ?? creditClass;
       const provider = isRecord(res.provider) ? res.provider : {};
       const receiptUrl = str(res.receiptUrl);
       return textResult(
@@ -1025,8 +1009,7 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
         counterpartyUrl: z.string().url().max(2048).optional().describe('Unregistered counterparty: a URL that identifies it (repo, site)'),
         counterpartyContact: z.string().max(320).optional().describe('Unregistered counterparty: contact detail; stored only as a hash and never contacted by ANS'),
         task: z.string().min(1).max(280).describe('What the work is, up to 280 characters'),
-        priceUsd: z.number().min(0).optional().describe('Price in US dollars, held in escrow when the counterparty accepts. Default 0.'),
-        creditClass: z.enum(['sandbox', 'cash']).optional().describe('Required above zero: sandbox (default) or cash'),
+        priceUsd: z.number().min(0).optional().describe('Price in US dollars, paid from the client wallet and held by ANS when the counterparty accepts. Default 0.'),
         deadlineHours: z.number().min(0.1).max(720).optional().describe('Hours until delivery is due. Default 48, max 720 (30 days).'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -1064,7 +1047,7 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
       }
 
       const price = args.priceUsd === undefined ? 0n : usdToMicros(args.priceUsd, 'priceUsd');
-      const creditClass: 'sandbox' | 'cash' | 'none' = price > 0n ? (args.creditClass ?? 'sandbox') : 'none';
+      const creditClass: 'cash' | 'none' = price > 0n ? 'cash' : 'none';
       const hours = args.deadlineHours ?? 48;
       const deadlineAt = floorSecIso(now().getTime() + Math.round(hours * 3600_000));
       const reviewWindowSec = 604800;
@@ -1139,7 +1122,7 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
     {
       title: 'Accept a proposed receipt',
       description:
-        'Use when another agent proposed a receipt naming you (ans_inbox lists them) and you agree to its terms: countersigns it so the work can start; a priced receipt holds the client credit in escrow.',
+        'Use when another agent proposed a receipt naming you (ans_inbox lists them) and you agree to its terms: countersigns it so the work can start; a priced receipt holds the client payment until the work is accepted.',
       inputSchema: {
         receiptId: z.string().min(3).max(300).describe('rc_... id or the receipt URL'),
       },
@@ -1366,7 +1349,6 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
         tags: z.array(z.string().min(2).max(32)).max(8).optional(),
         priceUsd: z.number().min(0).optional().describe('Price per call in US dollars. Default 0.'),
         endpoint: z.string().url().max(2048).describe('https URL the registry POSTs each call to (signed with the registry key)'),
-        acceptsSandbox: z.boolean().optional().describe('Accept SANDBOX credit (default true)'),
         timeoutMs: z.number().int().min(1000).max(120000).optional().describe('Reply deadline per call, default 30000'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -1390,7 +1372,6 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
           examples: args.examples ?? [],
           tags: args.tags ?? [],
           priceMicros,
-          acceptsSandbox: args.acceptsSandbox ?? true,
           endpoint: args.endpoint,
           version,
           publishSig,
@@ -1425,26 +1406,25 @@ export function registerAnsTools(server: McpServer, ctx: AnsToolsContext): AnsTo
     'read',
     {
       title: 'Wallet balances',
-      description: 'Use when you need your balances: SANDBOX and cash, available and held in escrow, payout eligibility, and the local cash cap.',
+      description: 'Use when you need your balances: money available and held until work is accepted, payout eligibility, and the local cash cap.',
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => {
       const [w, cap, spent] = await Promise.all([ctx.http.get<Json>('/v1/wallet'), capMicros(), spend.spentToday(now())]);
-      const sb = isRecord(w.sandbox) ? w.sandbox : {};
       const cash = isRecord(w.cash) ? w.cash : {};
       const topup = isRecord(w.topup) ? w.topup : {};
       return textResult(
         {
           agentId: w.agentId,
-          sandbox: { available: usd(sb.available), held: usd(sb.held) },
-          cash: { available: usd(cash.available), held: usd(cash.held) },
+          available: usd(cash.available),
+          held: usd(cash.held),
           payoutEligible: usd(w.payoutEligibleMicros),
           cardTopups: topup.enabled === true,
           localCashCapPerDay: cap === null ? null : formatUsd(cap),
           cashCommittedToday: formatUsd(spent),
         },
-        [`SANDBOX credit is not money. Cash top-ups happen at ${webUrl}/wallet, by a human, never by you.`],
+        [`Top-ups happen at ${webUrl}/wallet, by a human, never by you.`],
       );
     },
   );

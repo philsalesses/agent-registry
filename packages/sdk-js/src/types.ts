@@ -182,8 +182,6 @@ export interface RegisterResult extends WithAns {
   /** Store these: agentId, privateKey, publicKey, handle and apiKey */
   credentials: AgentCredentials;
   trust: WireTrust;
-  /** Sandbox credit granted at registration, micros */
-  sandboxCredit: string;
   next: {
     mcpConfig: { mcpServers: Record<string, { command: string; args: string[] }> };
     remoteMcp: { url: string; headers: Record<string, string> };
@@ -215,7 +213,7 @@ export interface UpdateAgentInput {
   paymentMethods?: PaymentMethod[];
   status?: WireAgentStatus;
   metadata?: Record<string, unknown>;
-  /** Operator policy: refuse unregistered callers, a trust floor, sandbox credit */
+  /** Operator policy: refuse unregistered callers, and a trust floor */
   policy?: Partial<WirePolicy>;
 }
 
@@ -245,7 +243,7 @@ export interface ApiKeyInfo {
 
 export interface CreateKeyInput {
   scopes?: ApiKeyScope[];
-  /** Daily cash spend cap for invoke through this key (sandbox is unlimited); default 0 */
+  /** Daily spend cap for paid invokes through this key, in micros; default 0 (free offers only) */
   spendCapMicrosPerDay?: Micros;
   label?: string;
 }
@@ -353,7 +351,6 @@ export interface PublishOfferInput {
   /** Price per call in dollars; ignored when priceMicros is given */
   priceUsd?: number | string;
   priceMicros?: Micros;
-  acceptsSandbox?: boolean;
   /** https endpoint the registry forwards invocations to */
   endpoint?: string | null;
   timeoutMs?: number;
@@ -381,7 +378,6 @@ export interface InvokeOptions {
   /** Refuse to pay more than this per call */
   maxPriceMicros?: Micros;
   maxPriceUsd?: number | string;
-  creditClass?: 'sandbox' | 'cash';
   /** Sent as the Idempotency-Key header; a retry with the same key replays the first result */
   idempotencyKey?: string;
   timeoutMs?: number;
@@ -437,8 +433,8 @@ export interface OpenReceiptInput {
   /** Price in dollars; ignored when priceMicros is given */
   priceUsd?: number | string;
   priceMicros?: Micros;
-  /** Required above zero price: 'sandbox' (default) or 'cash' */
-  creditClass?: 'sandbox' | 'cash';
+  /** Paid receipts are always 'cash' (the default above zero price) */
+  creditClass?: 'cash';
   /** Deadline from now in hours; default 48 */
   deadlineHours?: number;
   /** Explicit deadline instead of deadlineHours (rounded down to the second) */
@@ -536,7 +532,7 @@ export interface LedgerEntryView {
   ownerType: 'agent' | 'system';
   ownerId: string;
   kind: 'available' | 'held';
-  klass: 'sandbox' | 'cash';
+  klass: 'cash';
   amountMicros: string;
 }
 

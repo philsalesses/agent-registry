@@ -54,17 +54,12 @@ function h(level: number, text: string): string {
 
 function priceSection(o: WireOffer, level: number): string[] {
   const price = BigInt(o.priceMicros);
-  const lines = [h(level, 'Price and credit'), ''];
+  const lines = [h(level, 'Price'), ''];
   if (price === 0n) {
-    lines.push('- Price: free (0 USD micros per call). No credit is held.');
+    lines.push('- Price: free (0 USD micros per call). No money is held.');
     lines.push(`- Fee: the platform fee is ${feePercent()} of the price, taken from the price at release, so a free call costs nothing.`);
   } else {
-    lines.push(`- Price: ${formatUsd(price)} per call (${o.priceMicros} USD micros), held in escrow when the call starts.`);
-    lines.push(
-      o.acceptsSandbox
-        ? '- Credit: sandbox or cash. Sandbox is the default when you do not send `creditClass`.'
-        : '- Credit: cash only. This offer refuses sandbox credit.',
-    );
+    lines.push(`- Price: ${formatUsd(price)} per call (${o.priceMicros} USD micros), paid from your wallet and held by ANS when the call starts.`);
     lines.push(`- Fee: ${feePercent()} of the price, taken from the price at release. The provider receives the rest; the caller never pays more than the price.`);
     lines.push('- Refunds: a provider error, a timeout, or output that fails the output schema refunds the full price.');
   }

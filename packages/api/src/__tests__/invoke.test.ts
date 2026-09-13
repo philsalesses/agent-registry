@@ -14,19 +14,18 @@ import {
   signMessage,
   signRequest,
   verifyMessage,
-  SANDBOX_GRANT_MICROS,
 } from 'ans-core';
 import { db } from '../db';
 import { apiKeys, funnelEvents, ledgerTxns, notifications, offers, receiptEvents, receipts } from '../db/schema';
 import { onError } from '../lib/errors';
-import { balances, grantSandbox } from '../lib/ledger';
+import { balances } from '../lib/ledger';
 import { SafeFetchError } from '../lib/safeFetch';
 import { getRegistryKeys } from '../lib/registry-keys';
 import type { ForwardRequest, ForwardResponse } from '../lib/offers';
 import { createSessionToken } from '../lib/auth';
 import { offersRouter } from '../routes/offers';
 import { flushInvokeBackground, invokeRouter, setInvokeForwarder } from '../routes/invoke';
-import { agentAccountIds, createTestAgent, deleteRateLimitKeys, deleteTestAgents, purgeLedger, body as parse, type TestAgent } from './helpers';
+import { agentAccountIds, createTestAgent, deleteRateLimitKeys, deleteTestAgents, fundCash, purgeLedger, TEST_FUND_MICROS, body as parse, type TestAgent } from './helpers';
 
 const app = new Hono();
 app.use('*', requestId());
@@ -53,7 +52,9 @@ async function keyPost(key: string, path: string, payload: unknown, extra: Recor
 describe('POST /v1/invoke', () => {
   let provider: TestAgent;
   let caller: TestAgent;
+  let broke: TestAgent;
   let apiKey: string;
+  let zeroCapKey: string;
   const grantTxnIds: string[] = [];
   let reply: (req: ForwardRequest) => Promise<ForwardResponse>;
   const forwarded: ForwardRequest[] = [];
@@ -63,10 +64,14 @@ describe('POST /v1/invoke', () => {
   beforeAll(async () => {
     provider = await createTestAgent('inv-p');
     caller = await createTestAgent('inv-c');
-    grantTxnIds.push((await grantSandbox(caller.id)).txn.id);
+    broke = await createTestAgent('inv-b');
+    grantTxnIds.push((await fundCash(caller.id)).txn.id);
     const key = generateApiKey();
-    await db.insert(apiKeys).values({ id: key.prefix, keyHash: key.hash, agentId: caller.id, scopes: ['read', 'receipts', 'invoke', 'publish'], spendCapMicrosPerDay: 0n });
+    await db.insert(apiKeys).values({ id: key.prefix, keyHash: key.hash, agentId: caller.id, scopes: ['read', 'receipts', 'invoke', 'publish'], spendCapMicrosPerDay: 100_000_000n });
     apiKey = key.key;
+    const zero = generateApiKey();
+    await db.insert(apiKeys).values({ id: zero.prefix, keyHash: zero.hash, agentId: caller.id, scopes: ['read', 'receipts', 'invoke', 'publish'], spendCapMicrosPerDay: 0n });
+    zeroCapKey = zero.key;
     setInvokeForwarder(async (req) => {
       forwarded.push(req);
       return reply(req);
@@ -98,7 +103,7 @@ describe('POST /v1/invoke', () => {
   afterAll(async () => {
     setInvokeForwarder(null);
     await flushInvokeBackground();
-    const ids = [provider.id, caller.id];
+    const ids = [provider.id, caller.id, broke.id];
     const receiptIds = (await db.select({ id: receipts.id }).from(receipts).where(or(inArray(receipts.clientId, ids), inArray(receipts.providerId, ids)))).map((r) => r.id);
     const txnIds = receiptIds.length > 0 ? (await db.select({ id: ledgerTxns.id }).from(ledgerTxns).where(and(eq(ledgerTxns.refType, 'receipt'), inArray(ledgerTxns.refId, receiptIds)))).map((t) => t.id) : [];
     await purgeLedger({ txnIds: [...txnIds, ...grantTxnIds], accountIds: await agentAccountIds(ids) });
@@ -122,9 +127,9 @@ describe('POST /v1/invoke', () => {
     return row.stats as Record<string, any>;
   }
 
-  it('happy path: 200, receipt delivered, sandbox escrow held, stats updated, forward signed by the registry', async () => {
+  it('happy path: 200, receipt delivered, payment held, stats updated, forward signed by the registry', async () => {
     const before = await balances(caller.id);
-    expect(before.sandbox.available).toBe(SANDBOX_GRANT_MICROS);
+    expect(before.cash.available).toBe(TEST_FUND_MICROS);
     const input = { text: 'The quick brown fox jumps over the lazy dog.' };
     const res = await keyPost(apiKey, '/v1/invoke', { offer: `@${provider.handle}/summarize`, input }, { 'Idempotency-Key': `happy-${generateId('k', 8)}` });
     expect(res.status).toBe(200);
@@ -132,7 +137,7 @@ describe('POST /v1/invoke', () => {
     expect(json.receiptId).toMatch(/^rc_/);
     expect(json.offer).toBe(offerName);
     expect(json.output).toEqual({ summary: 'A fox.' });
-    expect(json.charged).toEqual({ priceMicros: '500000', feeMicros: feeForPrice(PRICE, 50).toString(), creditClass: 'sandbox' });
+    expect(json.charged).toEqual({ priceMicros: '500000', feeMicros: feeForPrice(PRICE, 50).toString(), creditClass: 'cash' });
     expect(json.charged.feeMicros).toBe('2500');
     expect(json.provider.id).toBe(provider.id);
     expect(json.provider.handle).toBe(provider.handle);
@@ -147,7 +152,7 @@ describe('POST /v1/invoke', () => {
     expect(r.clientId).toBe(caller.id);
     expect(r.providerId).toBe(provider.id);
     expect(r.offerId).toBe(offerId);
-    expect(r.creditClass).toBe('sandbox');
+    expect(r.creditClass).toBe('cash');
     expect(r.priceMicros).toBe(PRICE);
     expect(r.inputHash).toBe(sha256hex(canonicalize(input)));
     expect(r.outputHash).toBe(sha256hex(canonicalize({ summary: 'A fox.' })));
@@ -155,8 +160,8 @@ describe('POST /v1/invoke', () => {
     expect(r.sigMaterial?.keyId).toBeTruthy();
 
     const after = await balances(caller.id);
-    expect(after.sandbox.available).toBe(SANDBOX_GRANT_MICROS - PRICE);
-    expect(after.sandbox.held).toBe(PRICE);
+    expect(after.cash.available).toBe(TEST_FUND_MICROS - PRICE);
+    expect(after.cash.held).toBe(PRICE);
 
     const stats = await statsOf();
     expect(stats.calls).toBe(1);
@@ -188,14 +193,14 @@ describe('POST /v1/invoke', () => {
     expect(first.status).toBe(200);
     const firstJson = await parse(first);
     const count = await receiptCount();
-    const held = (await balances(caller.id)).sandbox.held;
+    const held = (await balances(caller.id)).cash.held;
 
     const second = await keyPost(apiKey, '/v1/invoke', payload, { 'Idempotency-Key': key });
     expect(second.status).toBe(200);
     expect(second.headers.get('Idempotent-Replayed')).toBe('true');
     expect((await parse(second)).receiptId).toBe(firstJson.receiptId);
     expect(await receiptCount()).toBe(count);
-    expect((await balances(caller.id)).sandbox.held).toBe(held);
+    expect((await balances(caller.id)).cash.held).toBe(held);
 
     const different = await keyPost(apiKey, '/v1/invoke', { ...payload, input: { text: 'something else' } }, { 'Idempotency-Key': key });
     expect(different.status).toBe(409);
@@ -260,8 +265,8 @@ describe('POST /v1/invoke', () => {
     expect(r.state).toBe('output_invalid');
     expect(r.sealedAt).toBeTruthy();
     const after = await balances(caller.id);
-    expect(after.sandbox.available).toBe(before.sandbox.available);
-    expect(after.sandbox.held).toBe(before.sandbox.held);
+    expect(after.cash.available).toBe(before.cash.available);
+    expect(after.cash.held).toBe(before.cash.held);
     const txns = await db.select({ type: ledgerTxns.type }).from(ledgerTxns).where(and(eq(ledgerTxns.refType, 'receipt'), eq(ledgerTxns.refId, r.id)));
     expect(txns.map((t) => t.type).sort()).toEqual(['hold', 'refund']);
     expect((await statsOf()).outputInvalid).toBe(1);
@@ -288,24 +293,25 @@ describe('POST /v1/invoke', () => {
       const [r] = await db.select().from(receipts).where(eq(receipts.id, json.details.receiptId));
       expect(r.state).toBe('failed');
       const after = await balances(caller.id);
-      expect(after.sandbox.available).toBe(before.sandbox.available);
-      expect(after.sandbox.held).toBe(before.sandbox.held);
+      expect(after.cash.available).toBe(before.cash.available);
+      expect(after.cash.held).toBe(before.cash.held);
     }
     const stats = await statsOf();
     expect(stats.failed - (stats0.failed ?? 0)).toBe(3);
     expect(stats.timeout - (stats0.timeout ?? 0)).toBe(1);
   });
 
-  it('402 insufficient_credit for an unfunded cash call (signed) and 402 spend_cap_exceeded for an api key capped at 0', async () => {
+  it('402 insufficient_credit for an unfunded agent (signed) and 402 spend_cap_exceeded for an api key capped at 0', async () => {
     const count = await receiptCount();
-    const unfunded = await signedPost(caller, '/v1/invoke', { offer: offerName, input: { text: 'pay cash' }, creditClass: 'cash' });
+    const unfunded = await signedPost(broke, '/v1/invoke', { offer: offerName, input: { text: 'pay cash' }, creditClass: 'cash' });
     expect(unfunded.status).toBe(402);
     const uj = await parse(unfunded);
     expect(uj.error).toBe('insufficient_credit');
-    expect(uj.details).toMatchObject({ have: '0', need: '500000', creditClass: 'cash', sandboxAccepted: true });
+    expect(uj.details).toMatchObject({ have: '0', need: '500000', creditClass: 'cash' });
+    expect(uj.details.sandboxAccepted).toBeUndefined();
     expect(uj.fix.url).toContain('/wallet');
 
-    const capped = await keyPost(apiKey, '/v1/invoke', { offer: offerName, input: { text: 'pay cash' }, creditClass: 'cash' });
+    const capped = await keyPost(zeroCapKey, '/v1/invoke', { offer: offerName, input: { text: 'pay cash' } });
     expect(capped.status).toBe(402);
     const cj = await parse(capped);
     expect(cj.error).toBe('spend_cap_exceeded');
@@ -337,12 +343,11 @@ describe('POST /v1/invoke', () => {
     expect((await parse(malformed)).error).toBe('validation_error');
   });
 
-  it('409 sandbox_not_accepted when the provider refuses sandbox, and paused offers refuse calls', async () => {
-    await db.update(offers).set({ acceptsSandbox: false }).where(eq(offers.id, offerId));
+  it('400 for creditClass sandbox, and paused offers refuse calls', async () => {
     const res = await keyPost(apiKey, '/v1/invoke', { offer: offerName, input: { text: 'x' }, creditClass: 'sandbox' });
-    expect(res.status).toBe(409);
-    expect((await parse(res)).error).toBe('sandbox_not_accepted');
-    await db.update(offers).set({ acceptsSandbox: true, status: 'paused' }).where(eq(offers.id, offerId));
+    expect(res.status).toBe(400);
+    expect((await parse(res)).error).toBe('validation_error');
+    await db.update(offers).set({ status: 'paused' }).where(eq(offers.id, offerId));
     const paused = await keyPost(apiKey, '/v1/invoke', { offer: `@${provider.handle}/summarize`, input: { text: 'x' } });
     expect(paused.status).toBe(409);
     expect((await parse(paused)).error).toBe('invalid_state');

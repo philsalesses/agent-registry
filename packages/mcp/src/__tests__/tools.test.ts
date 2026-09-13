@@ -40,7 +40,7 @@ async function connect(ctx: AnsToolsContext) {
 }
 
 const SELLER = { id: 'ag_SellerSeller1234', handle: 'seller' };
-const OFFER = { id: 'of_OfferOffer123456', name: '@seller/thing@1', slug: 'thing', priceMicros: '600000', acceptsSandbox: false, owner: { ...SELLER, trust: { score: 70, confidence: 0.5, rank: 60 } } };
+const OFFER = { id: 'of_OfferOffer123456', name: '@seller/thing@1', slug: 'thing', priceMicros: '600000', owner: { ...SELLER, trust: { score: 70, confidence: 0.5, rank: 60 } } };
 
 describe('ans_invoke local cash cap', () => {
   it('reserves cash per call, refuses above the cap, and gives the reservation back when the call fails', async () => {
@@ -64,17 +64,13 @@ describe('ans_invoke local cash cap', () => {
       transport: 'stdio',
     });
 
-    const noClass = await call('ans_invoke', { offer: '@seller/thing', input: { q: 1 } });
-    expect(noClass.isError).toBe(true);
-    expect(noClass.text).toContain('does not accept SANDBOX credit');
-
-    const first = await call('ans_invoke', { offer: '@seller/thing', input: { q: 1 }, creditClass: 'cash' });
+    const first = await call('ans_invoke', { offer: '@seller/thing', input: { q: 1 } });
     expect(first.isError).toBe(false);
     expect(first.json.charged).toEqual({ price: '$0.60', fee: '$0.003', creditClass: 'cash' });
     expect(first.text).toContain('Receipt: https://ans-registry.org/r/rc_Receipt123456789');
     expect(await spend.spentToday(new Date())).toBe(600_000n);
 
-    const second = await call('ans_invoke', { offer: '@seller/thing', input: { q: 2 }, creditClass: 'cash' });
+    const second = await call('ans_invoke', { offer: '@seller/thing', input: { q: 2 } });
     expect(second.isError).toBe(true);
     expect(second.text).toContain('over the local cap of $1.00 per day');
     expect(registry.calls.filter((c) => c.path === '/v1/invoke')).toHaveLength(1);
@@ -89,7 +85,7 @@ describe('ans_invoke local cash cap', () => {
       transport: 'stdio',
     });
     failNext = true;
-    const failed = await again.call('ans_invoke', { offer: '@seller/thing', input: { q: 3 }, creditClass: 'cash' });
+    const failed = await again.call('ans_invoke', { offer: '@seller/thing', input: { q: 3 } });
     expect(failed.isError).toBe(true);
     expect(failed.json.error).toBe('internal');
     expect(await roomy.spentToday(new Date())).toBe(0n);
