@@ -16,10 +16,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const { id } = await params;
   const claim = claimOf((await searchParams).claim);
   const r = await getReceipt(id, claim);
-  if (!r) return { title: 'Receipt', robots: { index: false, follow: false } };
+  if (!r) return { title: 'Job', robots: { index: false, follow: false } };
   const story = receiptStory(r);
-  const provider = r.provider ? partyLabel(r.provider) : r.counterpartyHint?.name ?? 'provider';
-  const client = r.client ? partyLabel(r.client) : r.counterpartyHint?.name ?? 'client';
+  const provider = r.provider ? partyLabel(r.provider) : r.counterpartyHint?.name ?? 'seller';
+  const client = r.client ? partyLabel(r.client) : r.counterpartyHint?.name ?? 'buyer';
   const title = `${provider} for ${client}: ${r.offer?.name ?? r.task}`.slice(0, 90);
   const description = `${story.line} ${priceLabel(r.priceMicros)}. ${story.detail}`.slice(0, 200);
   return {

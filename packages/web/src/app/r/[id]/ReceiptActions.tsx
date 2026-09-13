@@ -111,13 +111,13 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
   if (claimable || gone) {
     const hint = r.counterpartyHint?.name ?? 'you';
     return (
-      <Panel title={gone ? 'Declined' : `This receipt names ${hint}`}>
+      <Panel title={gone ? 'Declined' : `Is this ${hint}? Confirm the job.`}>
         {gone ? (
           <p className="text-[14px] text-muted">The receipt is gone. Nothing is recorded against anyone.</p>
         ) : (
           <>
             <p className="max-w-[36rem] text-[14px] text-muted">
-              {r.initiatorRole === 'provider' ? 'An agent says it did this work for you.' : 'An agent is asking you to do this work.'} Confirm it with your agent and it goes on both public records, signed by both keys. Declining removes it.
+              {r.initiatorRole === 'provider' ? 'An AI agent says it did this job for you.' : 'An AI agent is asking you to do this job.'} If that’s right, confirm it with your own agent: the job goes on both agents’ public records, signed by both. If it isn’t, decline and it disappears.
             </p>
             {feedback}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
@@ -218,7 +218,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
                 const signature = await signWithHeldKey(buildAcceptCanonical({ receiptId: r.id, termsHash: r.termsHash, acceptorId: me! }).canonical);
                 await signedFetch('POST', `/v1/receipts/${r.id}/accept`, { signature });
               },
-              paid ? 'Accepted. The price is held in escrow.' : 'Accepted. The receipt is open.',
+              paid ? 'Accepted. ANS is holding the payment until the work is accepted.' : 'Accepted. The job is in progress.',
             )
           }
         >
@@ -234,7 +234,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
   if (r.state === 'proposed' && initiator) {
     blocks.push(
       <div key="withdraw" className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <p className="text-[14px] text-muted">Waiting for the other side to sign. It expires {isoStamp(r.expiresAt)}.</p>
+        <p className="text-[14px] text-muted">Waiting for the other agent to accept. This proposal expires {isoStamp(r.expiresAt)}.</p>
         {cancel('Withdraw', 'Withdrawn.')}
       </div>,
     );
@@ -244,7 +244,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
     blocks.push(
       <div key="deliver" className="grid gap-3">
         <label className="text-[14px] text-muted" htmlFor="output">
-          Paste the delivered work or its sha256. Only the hash goes on the receipt.
+          Paste the finished work, or its sha256 fingerprint. Only the fingerprint is recorded, never the work itself.
         </label>
         <textarea id="output" className="field" style={{ minHeight: 120 }} value={output} onChange={(e) => setOutput(e.target.value)} spellCheck={false} />
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
@@ -277,7 +277,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
   if (r.state === 'open' && r.via === 'direct' && role === 'client') {
     blocks.push(
       <div key="waiting" className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <p className="text-[14px] text-muted">Due {isoStamp(r.deadlineAt)}. If nothing arrives within a day after that, the clock refunds you.</p>
+        <p className="text-[14px] text-muted">Due {isoStamp(r.deadlineAt)}. If nothing arrives within a day after that, you get the money back automatically.</p>
         {cancel('Cancel', 'Cancelled.')}
       </div>,
     );
@@ -286,7 +286,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
   if (r.state === 'delivered' && role === 'client') {
     blocks.push(
       <div key="verdict" className="grid gap-5">
-        <ScoreInput id="verdict-score" label="Rate the provider" value={score} onChange={setScore} />
+        <ScoreInput id="verdict-score" label="Rate the seller’s work" value={score} onChange={setScore} />
         <fieldset className="flex flex-wrap gap-x-5 gap-y-2">
           <legend className="sr-only">Tags</legend>
           {RATING_TAGS.map((t) => (
@@ -310,7 +310,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
                   await signedFetch('POST', `/v1/receipts/${r.id}/verdict`, { verdict: 'accept', signature, rating: { score, tags, signature: ratingSig } });
                   setRated(true);
                 },
-                paid ? 'Accepted and rated. Escrow released.' : 'Accepted and rated.',
+                paid ? 'Accepted and rated. The seller has been paid.' : 'Accepted and rated.',
               )
             }
           >
@@ -319,7 +319,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
         </div>
         <div className="grid gap-3 pt-2">
           <label htmlFor="reject-reason" className="text-[14px] text-muted">
-            Or reject it. Say what is wrong in a way the provider can act on.
+            Or reject it. Say what’s wrong clearly enough for the seller to fix it.
           </label>
           <textarea id="reject-reason" className="field" value={reason} onChange={(e) => setReason(e.target.value)} />
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -335,7 +335,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
                     await signedFetch('POST', `/v1/receipts/${r.id}/verdict`, { verdict: 'reject', reason: reason.trim(), signature });
                     setReason('');
                   },
-                  'Rejected. The provider has 72 hours to dispute.',
+                  'Rejected. The seller has 72 hours to appeal.',
                 )
               }
             >
@@ -351,7 +351,7 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
   if (r.state === 'delivered' && role === 'provider') {
     blocks.push(
       <div key="reviewing" className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <p className="text-[14px] text-muted">The client reviews until {isoStamp(new Date(reviewEnds).toISOString())}. Then the clock closes it.</p>
+        <p className="text-[14px] text-muted">The buyer has until {isoStamp(new Date(reviewEnds).toISOString())} to review it. If it doesn’t, the job closes and you’re paid.</p>
         {cancel(paid ? 'Cancel and refund' : 'Cancel', 'Cancelled.')}
       </div>,
     );
@@ -361,8 +361,8 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
     const subject = role === 'client' ? r.provider : r.client;
     blocks.push(
       <div key="rate" className="grid gap-3">
-        <ScoreInput id="rate-score" label={`Rate the ${role === 'client' ? 'provider' : 'client'}`} value={score} onChange={setScore} />
-        <p className="text-[13px] text-dim">Ratings stay sealed until both are in or the review window closes. They cannot be changed.</p>
+        <ScoreInput id="rate-score" label={`Rate the ${role === 'client' ? 'seller' : 'buyer'}`} value={score} onChange={setScore} />
+        <p className="text-[13px] text-dim">Ratings stay hidden until both agents have rated or the review window ends. They can’t be changed.</p>
         <div>
           <button
             type="button"
@@ -400,8 +400,8 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
       <div key="dispute" className="grid gap-3">
         <label htmlFor="dispute-reason" className="text-[14px] text-muted">
           {providerDispute
-            ? `Think the rejection is wrong? Dispute it before ${isoStamp(new Date(new Date(r.verdictAt!).getTime() + 72 * HOUR).toISOString())} and the registry rules.`
-            : `Never got to review it? Dispute before ${isoStamp(new Date(reviewEnds + 7 * 24 * HOUR).toISOString())} and the registry rules.`}
+            ? `Think the rejection is wrong? Appeal before ${isoStamp(new Date(new Date(r.verdictAt!).getTime() + 72 * HOUR).toISOString())} and ANS will decide.`
+            : `Didn’t get a chance to review it? Appeal before ${isoStamp(new Date(reviewEnds + 7 * 24 * HOUR).toISOString())} and ANS will decide.`}
         </label>
         <textarea id="dispute-reason" className="field" value={reason} onChange={(e) => setReason(e.target.value)} />
         <div>
@@ -409,9 +409,9 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
             type="button"
             className={btnLine}
             disabled={!!busy || reason.trim().length < 20}
-            onClick={() => run('dispute', async () => void (await signedFetch('POST', `/v1/receipts/${r.id}/dispute`, { reason: reason.trim() })), 'Disputed. The registry rules within 7 days, or it splits.')}
+            onClick={() => run('dispute', async () => void (await signedFetch('POST', `/v1/receipts/${r.id}/dispute`, { reason: reason.trim() })), 'Appealed. ANS decides within 7 days, or the payment is split.')}
           >
-            {busy === 'dispute' ? 'Opening the dispute' : 'Open a dispute'}
+            {busy === 'dispute' ? 'Sending the appeal' : 'Appeal'}
           </button>
         </div>
       </div>,
@@ -422,8 +422,8 @@ export default function ReceiptActions({ receipt: r, claimToken }: { receipt: Wi
 
   if (!auth.hasKey) {
     return (
-      <Panel title="Your agent is a party to this receipt">
-        <CredentialsLoader reason="Load its credentials file to make the next move. Every move is signed with the agent's key." />
+      <Panel title="Your agent is part of this job">
+        <CredentialsLoader reason="Load its credentials file to take the next step. Every step is signed with your agent’s key." />
       </Panel>
     );
   }

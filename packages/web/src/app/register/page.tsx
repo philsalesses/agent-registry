@@ -4,7 +4,7 @@ import RegisterFlow from './RegisterFlow';
 
 export const metadata: Metadata = {
   title: 'Register an agent',
-  description: 'Give an agent a key, a public record and $25 of sandbox credit. The key is generated in your browser.',
+  description: 'Register your AI agent on ANS: it gets an ID, a public profile and $25 of test credit. The secret key is created in your browser.',
   alternates: { canonical: '/register' },
 };
 

@@ -25,36 +25,36 @@ function OfferLine({ offer, showOwner }: { offer: WireOfferSummary; showOwner: b
           <span className="mt-0.5 block truncate text-[14px] text-muted">{offer.title}</span>
         </span>
         <span className="figure hidden truncate text-[13px] text-muted md:block" title={offer.inputFields.join(', ')}>
-          {offer.inputFields.slice(0, 3).join(', ') || 'no input'}
+          {offer.inputFields.slice(0, 3).join(', ') || 'nothing'}
         </span>
         <span className="figure hidden truncate text-[13px] text-muted md:block" title={offer.outputFields.join(', ')}>
-          {offer.outputFields.slice(0, 3).join(', ') || 'no output'}
+          {offer.outputFields.slice(0, 3).join(', ') || 'nothing'}
         </span>
         <span className="figure text-right text-[14px] text-text">{priceLabel(offer.priceMicros)}</span>
         <span className="figure hidden text-right text-[13px] text-muted md:block">
           {showOwner
             ? offer.owner.isHouse
-              ? 'house'
+              ? 'run by ANS'
               : `${offer.owner.trust.score} · ${confidenceLabel(offer.owner.trust.confidence)}`
             : offer.stats.calls > 0
-              ? `${Math.round((offer.stats.ok / Math.max(offer.stats.calls, 1)) * 100)}% ok`
-              : 'no calls'}
+              ? `${Math.round((offer.stats.ok / Math.max(offer.stats.calls, 1)) * 100)}% worked`
+              : 'not used yet'}
         </span>
       </Link>
     </li>
   );
 }
 
-/** A table of typed offers: name and title, what it takes, what it returns, price, and owner trust or call health. */
+/** A table of services: name and title, what you send, what you get back, price, and the seller's trust or call health. */
 export default function OfferRows({ offers, showOwner = true, empty }: { offers: WireOfferSummary[]; showOwner?: boolean; empty?: React.ReactNode }) {
   return (
     <div className="panel overflow-hidden">
       <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_7rem] gap-x-6 px-4 pb-2 pt-4 text-[12px] text-dim md:grid">
-        <span>offer</span>
-        <span>takes</span>
-        <span>returns</span>
+        <span>service</span>
+        <span>you send</span>
+        <span>you get back</span>
         <span className="text-right">price</span>
-        <span className="text-right">{showOwner ? 'owner trust' : 'calls'}</span>
+        <span className="text-right">{showOwner ? 'seller’s trust' : 'success rate'}</span>
       </div>
       {offers.length > 0 ? <ul className="grid pb-1">{offers.map((o) => <OfferLine key={o.id} offer={o} showOwner={showOwner} />)}</ul> : <div className="px-4 py-10">{empty}</div>}
     </div>

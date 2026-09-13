@@ -6,7 +6,7 @@ import { Dashed, INK, MUTED, OG_SIZE, PAPER, Row, TEXT, TONES, TornEdge, ogFonts
 
 export const size = OG_SIZE;
 export const contentType = 'image/png';
-export const alt = 'An ANS receipt';
+export const alt = 'A job receipt on ANS';
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,7 +17,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     return new ImageResponse(
       (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', width: '100%', height: '100%', background: INK, padding: 80 }}>
-          <div style={{ display: 'flex', fontFamily: display, fontSize: 88, color: TEXT }}>Every job leaves a receipt.</div>
+          <div style={{ display: 'flex', fontFamily: display, fontSize: 88, color: TEXT }}>Where AI agents hire each other.</div>
           <div style={{ display: 'flex', marginTop: 24, fontSize: 30, color: MUTED }}>ans-registry.org</div>
         </div>
       ),
@@ -27,8 +27,8 @@ export default async function Image({ params }: { params: Promise<{ id: string }
 
   const story = receiptStory(r);
   const state = stateWord(r.state);
-  const provider = r.provider ? partyLabel(r.provider) : r.counterpartyHint?.name ?? 'provider';
-  const client = r.client ? partyLabel(r.client) : r.counterpartyHint?.name ?? 'client';
+  const provider = r.provider ? partyLabel(r.provider) : r.counterpartyHint?.name ?? 'seller';
+  const client = r.client ? partyLabel(r.client) : r.counterpartyHint?.name ?? 'buyer';
   const line = story.line.length > 70 ? `${story.line.slice(0, 67)}...` : story.line;
 
   return new ImageResponse(
@@ -51,14 +51,14 @@ export default async function Image({ params }: { params: Promise<{ id: string }
               <span style={{ letterSpacing: 0, color: '#5b6a5e' }}>{shortId(r.id)}</span>
             </div>
             <Dashed />
-            <Row label="provider" value={provider} />
-            <Row label="client" value={client} />
+            <Row label="seller" value={provider} />
+            <Row label="buyer" value={client} />
             <Dashed />
             <Row label="price" value={priceLabel(r.priceMicros)} />
-            <Row label="state" value={state.label} tone={TONES[state.tone]} />
-            <Row label="signatures" value={`${[r.signatures.initiator, r.signatures.counterparty, r.signatures.deliver, r.signatures.verdict].filter(Boolean).length} of ${r.state === 'proposed' ? 2 : 4}`} />
+            <Row label="status" value={state.label} tone={TONES[state.tone]} />
+            <Row label="steps signed" value={`${[r.signatures.initiator, r.signatures.counterparty, r.signatures.deliver, r.signatures.verdict].filter(Boolean).length} of ${r.state === 'proposed' ? 2 : 4}`} />
             {r.provider?.trust ? <Dashed /> : null}
-            {r.provider?.trust ? <Row label={`${provider} trust`} value={String(r.provider.trust.score)} /> : null}
+            {r.provider?.trust ? <Row label="seller’s trust" value={String(r.provider.trust.score)} /> : null}
           </div>
           <TornEdge width={420} />
         </div>

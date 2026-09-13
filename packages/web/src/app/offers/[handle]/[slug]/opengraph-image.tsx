@@ -5,7 +5,7 @@ import { Dashed, INK, MUTED, OG_SIZE, PAPER, Row, TEXT, TornEdge, ogFonts } from
 
 export const size = OG_SIZE;
 export const contentType = 'image/png';
-export const alt = 'An offer on ANS';
+export const alt = 'A service on ANS';
 
 function clip(s: string, n: number) {
   return s.length > n ? `${s.slice(0, n - 3)}...` : s;
@@ -21,7 +21,7 @@ export default async function Image({ params }: { params: Promise<{ handle: stri
     return new ImageResponse(
       (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', width: '100%', height: '100%', background: INK, padding: 80 }}>
-          <div style={{ display: 'flex', fontFamily: display, fontSize: 88, color: TEXT }}>Work you can call.</div>
+          <div style={{ display: 'flex', fontFamily: display, fontSize: 88, color: TEXT }}>Services AI agents sell.</div>
           <div style={{ display: 'flex', marginTop: 24, fontSize: 30, color: MUTED }}>ans-registry.org/offers</div>
         </div>
       ),
@@ -31,7 +31,7 @@ export default async function Image({ params }: { params: Promise<{ handle: stri
 
   const label = offer.name.replace(/@\d+$/, '');
   const title = clip(offer.title, 60);
-  const okRate = offer.stats.calls > 0 ? `${Math.round((offer.stats.ok / offer.stats.calls) * 100)}%` : 'no calls yet';
+  const okRate = offer.stats.calls > 0 ? `${Math.round((offer.stats.ok / offer.stats.calls) * 100)}%` : 'not used yet';
 
   return (
     new ImageResponse(
@@ -43,15 +43,15 @@ export default async function Image({ params }: { params: Promise<{ handle: stri
               <div style={{ display: 'flex', fontFamily: display, fontSize: title.length > 30 ? 56 : 72, lineHeight: 1.06, color: TEXT }}>{title}</div>
               <div style={{ display: 'flex', marginTop: 18, fontSize: 28, color: MUTED }}>{label}</div>
               <div style={{ display: 'flex', marginTop: 18, fontSize: 24, lineHeight: 1.4, color: MUTED, maxWidth: 560 }}>
-                {clip(`Takes ${offer.inputFields.join(', ') || 'nothing'}. Returns ${offer.outputFields.join(', ') || 'nothing'}.`, 110)}
+                {clip(`You send ${offer.inputFields.join(', ') || 'nothing'}. You get back ${offer.outputFields.join(', ') || 'nothing'}.`, 110)}
               </div>
             </div>
-            <div style={{ display: 'flex', fontSize: 24, color: MUTED }}>Every call leaves a receipt</div>
+            <div style={{ display: 'flex', fontSize: 24, color: MUTED }}>ans-registry.org/offers/{label.replace(/^@/, '')}</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', width: 420, marginTop: 8 }}>
             <div style={{ display: 'flex', flexDirection: 'column', background: PAPER, padding: '28px 30px 22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 22, letterSpacing: 2, color: '#1a2419' }}>
-                <span>ANS OFFER</span>
+                <span>ANS SERVICE</span>
                 <span style={{ letterSpacing: 0, color: '#5b6a5e' }}>v{offer.version}</span>
               </div>
               <Dashed />
@@ -60,9 +60,9 @@ export default async function Image({ params }: { params: Promise<{ handle: stri
                 <span style={{ display: 'flex', fontSize: 72, lineHeight: 1, color: '#1a2419' }}>{priceLabel(offer.priceMicros)}</span>
               </div>
               <Dashed />
-              <Row label="calls" value={String(offer.stats.calls)} />
-              <Row label="succeeded" value={okRate} />
-              <Row label="owner trust" value={offer.owner.isHouse ? 'house' : `${offer.owner.trust.score} · ${confidenceLabel(offer.owner.trust.confidence)}`} />
+              <Row label="times used" value={String(offer.stats.calls)} />
+              <Row label="worked" value={okRate} />
+              <Row label="seller’s trust" value={offer.owner.isHouse ? 'run by ANS' : `${offer.owner.trust.score} · ${confidenceLabel(offer.owner.trust.confidence)}`} />
             </div>
             <TornEdge width={420} />
           </div>

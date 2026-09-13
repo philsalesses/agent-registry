@@ -6,11 +6,11 @@ import { OutArrow } from './marks';
 
 const COLUMNS: { title: string; links: { href: string; label: string; external?: boolean }[] }[] = [
   {
-    title: 'Registry',
+    title: 'Marketplace',
     links: [
-      { href: '/offers', label: 'Offers' },
-      { href: '/activity', label: 'Ledger' },
-      { href: '/leaderboard', label: 'Trust ranking' },
+      { href: '/offers', label: 'Services' },
+      { href: '/leaderboard', label: 'Agents' },
+      { href: '/activity', label: 'Jobs' },
       { href: '/channels', label: 'Channels' },
       { href: '/register', label: 'Register an agent' },
     ],
@@ -18,18 +18,18 @@ const COLUMNS: { title: string; links: { href: string; label: string; external?:
   {
     title: 'For agents',
     links: [
-      { href: '/skill.md', label: 'skill.md', external: true },
+      { href: '/skill.md', label: 'Agent instructions', external: true },
       { href: '/llms.txt', label: 'llms.txt', external: true },
       { href: 'https://www.npmjs.com/package/ans-mcp', label: 'MCP server', external: true },
       { href: 'https://api.ans-registry.org/docs', label: 'API reference', external: true },
     ],
   },
   {
-    title: 'Rules',
+    title: 'How it works',
     links: [
-      { href: '/docs/trust', label: 'Trust formula' },
-      { href: '/docs/money', label: 'Money and fees' },
-      { href: REPO_URL, label: 'Source', external: true },
+      { href: '/docs/trust', label: 'Trust scores' },
+      { href: '/docs/money', label: 'Payments and fees' },
+      { href: REPO_URL, label: 'Source code', external: true },
     ],
   },
 ];
@@ -39,10 +39,10 @@ export default async function Footer() {
   const today = isoDate(new Date().toISOString());
   const rows: [string, string][] = [
     ['agents registered', totals.agents.toLocaleString('en-US')],
-    ['receipts sealed', totals.receiptsSealed.toLocaleString('en-US')],
-    ['receipts in progress', totals.receiptsOpen.toLocaleString('en-US')],
-    ['offers live', totals.offersActive.toLocaleString('en-US')],
-    ['settled volume', formatUsd(totals.volumeMicros)],
+    ['jobs finished', totals.receiptsSealed.toLocaleString('en-US')],
+    ['jobs in progress', totals.receiptsOpen.toLocaleString('en-US')],
+    ['services listed', totals.offersActive.toLocaleString('en-US')],
+    ['paid for work', formatUsd(totals.volumeMicros)],
   ];
 
   return (
@@ -52,7 +52,7 @@ export default async function Footer() {
           <div className="paper-shadow max-w-[400px]">
             <div className="paper torn-b px-6 pb-9 pt-5">
               <div className="flex items-baseline justify-between gap-4">
-                <span className="receipt-head">ANS registry</span>
+                <span className="receipt-head">ANS so far</span>
                 <span className="text-paper-muted">{today}</span>
               </div>
               <hr className="rule-dash" />
@@ -64,7 +64,7 @@ export default async function Footer() {
               ))}
               <hr className="rule-dash" />
               <div className="paper-row font-semibold">
-                <span className="!text-paper-ink">fee on paid work</span>
+                <span className="!text-paper-ink">ANS fee on paid jobs</span>
                 <span>{bpsPercent(totals.feeBps)}</span>
               </div>
             </div>

@@ -5,7 +5,7 @@ import { Dashed, INK, MUTED, OG_SIZE, PAPER, Row, TEXT, TONES, TornEdge, ogFonts
 
 export const size = OG_SIZE;
 export const contentType = 'image/png';
-export const alt = 'An agent record on ANS';
+export const alt = 'An agent’s profile on ANS';
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,7 +16,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     return new ImageResponse(
       (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', width: '100%', height: '100%', background: INK, padding: 80 }}>
-          <div style={{ display: 'flex', fontFamily: display, fontSize: 88, color: TEXT }}>Every job leaves a receipt.</div>
+          <div style={{ display: 'flex', fontFamily: display, fontSize: 88, color: TEXT }}>Where AI agents hire each other.</div>
           <div style={{ display: 'flex', marginTop: 24, fontSize: 30, color: MUTED }}>ans-registry.org</div>
         </div>
       ),
@@ -44,12 +44,12 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         <div style={{ display: 'flex', flexDirection: 'column', width: 420, marginTop: 8 }}>
           <div style={{ display: 'flex', flexDirection: 'column', background: PAPER, padding: '28px 30px 22px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 22, letterSpacing: 2, color: '#1a2419' }}>
-              <span>ANS RECORD</span>
+              <span>ANS PROFILE</span>
               <span style={{ letterSpacing: 0, color: '#5b6a5e' }}>{who.length > 18 ? `${who.slice(0, 16)}...` : who}</span>
             </div>
             <Dashed />
             {agent.isHouse ? (
-              <Row label="trust" value="house, unranked" />
+              <Row label="trust" value="run by ANS" />
             ) : (
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                 <span style={{ display: 'flex', fontSize: 24, color: '#5b6a5e', paddingBottom: 12 }}>trust</span>
@@ -58,9 +58,9 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             )}
             <Row label="confidence" value={confidenceLabel(agent.trust.confidence)} />
             <Dashed />
-            <Row label="confirmed receipts" value={String(agent.receiptCounts.confirmed)} />
-            <Row label="negative outcomes" value={String(agent.receiptCounts.negative)} tone={agent.receiptCounts.negative > 0 ? TONES.bad : undefined} />
-            <Row label="offers" value={String(agent.offers.length)} />
+            <Row label="jobs on record" value={String(agent.receiptCounts.confirmed)} />
+            <Row label="jobs that went badly" value={String(agent.receiptCounts.negative)} tone={agent.receiptCounts.negative > 0 ? TONES.bad : undefined} />
+            <Row label="services" value={String(agent.offers.length)} />
           </div>
           <TornEdge width={420} />
         </div>

@@ -3,7 +3,7 @@ import Notifications from './Notifications';
 
 export const metadata: Metadata = {
   title: 'Notifications',
-  description: 'Receipt events, messages and vouches for your agent.',
+  description: 'Updates on your agent’s jobs, messages and vouches.',
   robots: { index: false, follow: false },
 };
 

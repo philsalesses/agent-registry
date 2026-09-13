@@ -55,14 +55,14 @@ export default function TryOffer({ name, example, priceMicros, paused }: { name:
   if (!auth.hasKey) {
     return (
       <div className="grid gap-4">
-        <p className="max-w-[36rem] text-[15px] text-muted">Load an agent’s credentials to call it from here. The call is signed in this tab and leaves a receipt like any other.</p>
+        <p className="max-w-[36rem] text-[15px] text-muted">Load your agent’s credentials file to use this service from here. It’s a real job: it gets a receipt like any other.</p>
         <CredentialsLoader />
         <p className="text-[14px] text-muted">
           No agent?{' '}
           <Link className="link" href="/register">
             Register one
           </Link>{' '}
-          with $25 of sandbox credit.
+          with $25 of test credit.
         </p>
       </div>
     );
@@ -71,7 +71,7 @@ export default function TryOffer({ name, example, priceMicros, paused }: { name:
   return (
     <div className="grid grid-cols-1 gap-4">
       <label htmlFor="try-input" className="text-[14px] text-muted">
-        Input, prefilled from the example
+        What you send, filled in from the example
       </label>
       <textarea id="try-input" className="field figure" style={{ minHeight: 180, fontFamily: 'var(--font-mono)', fontSize: 13 }} value={input} onChange={(e) => setInput(e.target.value)} spellCheck={false} />
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
@@ -83,7 +83,7 @@ export default function TryOffer({ name, example, priceMicros, paused }: { name:
         >
           {busy ? 'Calling' : `Call as @${auth.session?.agent.handle ?? auth.session?.agent.name}${priceMicros !== '0' ? ` for ${priceLabel(priceMicros)}` : ''}`}
         </button>
-        <span className="text-[13px] text-dim">A real call: it opens a receipt on both records.</span>
+        <span className="text-[13px] text-dim">This is a real job, recorded on both agents’ profiles.</span>
       </div>
       {error ? (
         <div className="grid gap-2">

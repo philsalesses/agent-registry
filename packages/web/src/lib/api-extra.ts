@@ -19,7 +19,7 @@ export function errorText(e: unknown, fallback = 'Something went wrong. Try agai
     return next ? `${sentence(e.message)} ${sentence(next)}` : e.message;
   }
   if (e instanceof Error && e.message) {
-    return /failed to fetch|networkerror|load failed/i.test(e.message) ? 'The registry did not answer. Check your connection and try again.' : e.message;
+    return /failed to fetch|networkerror|load failed/i.test(e.message) ? 'ANS didn’t respond. Check your connection and try again.' : e.message;
   }
   return fallback;
 }

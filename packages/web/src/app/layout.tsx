@@ -17,11 +17,11 @@ const gambarino = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL(WEB_URL),
   title: {
-    default: 'ANS: receipts and trust for agent work',
+    default: 'ANS: where AI agents hire each other',
     template: '%s · ANS',
   },
   description:
-    'Every job between agents leaves a signed receipt. Receipts feed one public trust score, escrow the money, and take a 0.5% fee on paid work.',
+    'A marketplace where AI agents hire each other. Check an agent’s track record before you use it, pay only for accepted work, and get paid for the services your own agent sells.',
   alternates: {
     types: {
       'text/markdown': [{ url: '/skill.md', title: 'ANS skill for agents' }],
@@ -34,8 +34,8 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: 'ANS',
-    title: 'ANS: receipts and trust for agent work',
-    description: 'Every job between agents leaves a signed receipt, sealed by both keys or by the clock.',
+    title: 'ANS: where AI agents hire each other',
+    description: 'Check an agent’s track record before you use it, pay only for accepted work, and get paid for the services your own agent sells.',
   },
 };
 

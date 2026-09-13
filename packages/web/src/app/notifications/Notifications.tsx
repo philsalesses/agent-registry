@@ -42,22 +42,22 @@ function describe(n: AppNotification): Described {
     switch (kind) {
       case 'receipt.proposed': {
         const price = str(p.priceMicros) ? priceLabel(str(p.priceMicros)) : null;
-        return { ...base, title: `${agentLabel(p.from)} proposed a receipt naming you`, detail: [str(p.task), price].filter(Boolean).join(' · ') || null };
+        return { ...base, title: `${agentLabel(p.from)} proposed a job with you`, detail: [str(p.task), price].filter(Boolean).join(' · ') || null };
       }
       case 'receipt.opened':
-        return { ...base, title: 'Receipt opened: both sides signed the terms' };
+        return { ...base, title: 'Job agreed: both agents signed the terms' };
       case 'receipt.declined':
-        return { ...base, title: 'Your proposed receipt was declined' };
+        return { ...base, title: 'Your job proposal was declined' };
       case 'receipt.delivered':
         return { ...base, title: 'Work delivered and waiting for your review', detail: str(p.reviewBy) ? `review by ${isoStamp(str(p.reviewBy))}` : null };
       case 'receipt.rejected':
-        return { ...base, title: 'Your delivery was rejected', detail: [str(p.reason), str(p.disputeBy) ? `dispute by ${isoStamp(str(p.disputeBy))}` : null].filter(Boolean).join(' · ') || null };
+        return { ...base, title: 'Your delivery was rejected', detail: [str(p.reason), str(p.disputeBy) ? `appeal by ${isoStamp(str(p.disputeBy))}` : null].filter(Boolean).join(' · ') || null };
       case 'receipt.sealed':
-        return { ...base, title: 'Receipt sealed', detail: str(p.state) ? `final state: ${stateWord(str(p.state)!).label}` : null };
+        return { ...base, title: 'Job finished and added to your record', detail: str(p.state) ? `ended as: ${stateWord(str(p.state)!).label}` : null };
       case 'receipt.disputed':
-        return { ...base, title: 'A receipt you are on is disputed', detail: 'An admin rules within 7 days, or the clock splits it.' };
+        return { ...base, title: 'A job you’re part of was appealed', detail: 'ANS decides within 7 days, or the payment is split.' };
       case 'receipt.rated':
-        return { ...base, title: p.revealed ? 'Ratings revealed' : 'A rating came in, sealed until both are in' };
+        return { ...base, title: p.revealed ? 'Ratings are now visible' : 'A rating came in, hidden until both agents rate' };
       default:
         return { ...base, title: kind.replace('receipt.', 'Receipt ').replace(/_/g, ' ') };
     }
@@ -66,7 +66,7 @@ function describe(n: AppNotification): Described {
   if (kind === 'invoke.received') {
     const receiptId = str(p.receiptId);
     return {
-      title: `${str(p.offer) ?? 'Your offer'} was called by ${agentLabel(p.caller)}`,
+      title: `${agentLabel(p.caller)} used ${str(p.offer) ?? 'your service'}`,
       detail: money(p.priceMicros),
       href: receiptId ? `/r/${receiptId}` : undefined,
       receiptId,
@@ -114,7 +114,7 @@ export default function Notifications() {
   return (
     <>
       <h1 className="display text-[clamp(2.4rem,4.8vw,3.75rem)]">Notifications</h1>
-      {!auth.ready ? null : !me ? <SignInPrompt next="/notifications">Receipt events, messages and vouches arrive here for your agent. Sign in to read them.</SignInPrompt> : <Inbox key={me.id} me={me} />}
+      {!auth.ready ? null : !me ? <SignInPrompt next="/notifications">Updates on your agent’s jobs, messages and vouches show up here. Sign in to read them.</SignInPrompt> : <Inbox key={me.id} me={me} />}
     </>
   );
 }

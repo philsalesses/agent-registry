@@ -6,11 +6,13 @@ import { OpenMark, SealMark } from './marks';
 
 type Size = 'hero' | 'ticket' | 'row';
 
-function Row({ label, children, title }: { label: string; children: React.ReactNode; title?: string }) {
+function Row({ label, children, title, wrap = false }: { label: string; children: React.ReactNode; title?: string; wrap?: boolean }) {
   return (
     <div className="paper-row">
       <span>{label}</span>
-      <span title={title}>{children}</span>
+      <span title={title} className={wrap ? '!whitespace-normal [text-wrap:balance]' : undefined}>
+        {children}
+      </span>
     </div>
   );
 }
@@ -21,22 +23,22 @@ function Dash() {
 
 function creditLabel(r: WireReceipt): string {
   if (r.priceMicros === '0') return 'free';
-  return r.creditClass === 'sandbox' ? 'sandbox credit' : 'cash credit';
+  return r.creditClass === 'sandbox' ? 'test credit' : 'money';
 }
 
 function ratingsLine(r: WireReceipt): string | null {
-  if (!r.ratings.revealed) return r.deliveredAt ? 'sealed until both rate' : null;
+  if (!r.ratings.revealed) return r.deliveredAt ? 'hidden until both rate' : null;
   const toProvider = r.ratings.provider?.score;
   const toClient = r.ratings.client?.score;
   if (toProvider === undefined && toClient === undefined) return null;
-  return `${toProvider ?? '-'} for provider · ${toClient ?? '-'} for client`;
+  return `${toProvider ?? '-'} to seller · ${toClient ?? '-'} to buyer`;
 }
 
 function counterpartyName(r: WireReceipt, role: 'client' | 'provider'): string {
   const party = role === 'client' ? r.client : r.provider;
   if (party) return partyLabel(party);
-  if (r.counterpartyHint) return `${r.counterpartyHint.name} (unclaimed)`;
-  return 'unclaimed';
+  if (r.counterpartyHint) return `${r.counterpartyHint.name} (not on ANS yet)`;
+  return 'not on ANS yet';
 }
 
 /**
@@ -49,7 +51,7 @@ export default function Receipt({ receipt: r, size = 'hero', link = true, sample
   const href = `/r/${r.id}`;
 
   if (size === 'row') {
-    const work = r.offer?.name ?? r.task;
+    const work = r.offer?.title ?? r.task;
     const body = (
       <div className="paper torn-r grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-5 gap-y-0.5 py-2.5 pl-4 pr-8 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1.25fr)_4.75rem_6rem_4.25rem]">
         <span className="truncate" title={`${counterpartyName(r, 'provider')} for ${counterpartyName(r, 'client')}`}>
@@ -96,7 +98,7 @@ export default function Receipt({ receipt: r, size = 'hero', link = true, sample
           {counterpartyName(r, 'provider')} <span className="text-paper-muted">for</span> {counterpartyName(r, 'client')}
         </p>
         <p className="mt-1 line-clamp-2 text-paper-muted" title={r.offer?.name ?? r.task}>
-          {r.offer?.name ?? r.task}
+          {r.offer?.title ?? r.task}
         </p>
         <Dash />
         <div className="paper-row">
@@ -120,42 +122,42 @@ export default function Receipt({ receipt: r, size = 'hero', link = true, sample
       <article className="paper torn-b px-6 pb-10 pt-5" aria-label={`Receipt ${r.id}`}>
         <div className="flex items-center justify-between gap-4">
           <span className="receipt-head">ANS receipt</span>
-          <Mark size={18} className={sealed ? 'text-paper-ink' : 'text-paper-muted'} title={sealed ? 'sealed into both chains' : 'in progress'} />
+          <Mark size={18} className={sealed ? 'text-paper-ink' : 'text-paper-muted'} title={sealed ? 'final: on both public records' : 'in progress'} />
         </div>
         <div className="paper-row mt-1">
           <span className="!text-paper-ink">{r.id}</span>
           <span>{isoDate(r.createdAt)}</span>
         </div>
         <Dash />
-        <Row label="provider">{counterpartyName(r, 'provider')}</Row>
-        <Row label="client">{counterpartyName(r, 'client')}</Row>
-        {r.offer ? <Row label="offer" title={r.offer.title}>{r.offer.name}</Row> : null}
+        <Row label="by">{counterpartyName(r, 'provider')}</Row>
+        <Row label="for">{counterpartyName(r, 'client')}</Row>
+        {r.offer ? <Row label="service" title={r.offer.title}>{r.offer.name}</Row> : null}
         <div className="mt-1">
-          <span className="text-paper-muted">task</span>
+          <span className="text-paper-muted">job</span>
           <p className="mt-0.5 whitespace-pre-wrap break-words">{r.task}</p>
         </div>
         <Dash />
         <Row label="price">{priceLabel(r.priceMicros)}</Row>
-        {r.priceMicros !== '0' ? <Row label={`fee ${bpsPercent(r.feeBps)}`}>{priceLabel(r.feeMicros)}</Row> : null}
+        {r.priceMicros !== '0' ? <Row label={`ANS fee ${bpsPercent(r.feeBps)}`}>{priceLabel(r.feeMicros)}</Row> : null}
         <Row label="paid with">{creditLabel(r)}</Row>
-        <Row label="deadline">{isoStamp(r.deadlineAt)}</Row>
+        <Row label="due">{isoStamp(r.deadlineAt)}</Row>
         <Dash />
         <div className="paper-row">
-          <span>state</span>
+          <span>status</span>
           <StateWord state={r.state} surface="paper" className="font-semibold" />
         </div>
         {ratings ? <Row label="ratings">{ratings}</Row> : null}
         {r.deliveredAt ? <Row label="delivered">{isoStamp(r.deliveredAt)}</Row> : null}
-        {r.sealedAt ? <Row label="sealed">{isoStamp(r.sealedAt)}</Row> : null}
-        <Row label="signed" title={r.signatures.attested.length ? `registry attested: ${r.signatures.attested.join(', ')}` : 'every signature is the party’s own key'}>
-          {[r.signatures.initiator && 'terms', r.signatures.counterparty && 'accept', r.signatures.deliver && 'delivery', r.signatures.verdict && 'verdict'].filter(Boolean).join(' · ') || 'terms'}
+        {r.sealedAt ? <Row label="closed">{isoStamp(r.sealedAt)}</Row> : null}
+        <Row label="signed" wrap title={r.signatures.attested.length ? `vouched for by ANS on the agent’s behalf: ${r.signatures.attested.join(', ')}` : 'each step signed with the agent’s own key'}>
+          {[r.signatures.initiator && 'terms', r.signatures.counterparty && 'acceptance', r.signatures.deliver && 'delivery', r.signatures.verdict && 'review'].filter(Boolean).join('\u00a0· ') || 'terms'}
         </Row>
         {r.hash ? (
           <>
             <Dash />
-            <Row label="hash" title={r.hash}>{shortHash(r.hash, 6, 6)}</Row>
-            <Row label="prev (provider)" title={r.prevHashProvider ?? 'first in chain'}>{r.prevHashProvider ? shortHash(r.prevHashProvider, 6, 6) : 'first'}</Row>
-            <Row label="prev (client)" title={r.prevHashClient ?? 'first in chain'}>{r.prevHashClient ? shortHash(r.prevHashClient, 6, 6) : 'first'}</Row>
+            <Row label="fingerprint" title={r.hash}>{shortHash(r.hash, 6, 6)}</Row>
+            <Row label="seller’s previous" title={r.prevHashProvider ?? 'first job on record'}>{r.prevHashProvider ? shortHash(r.prevHashProvider, 6, 6) : 'first job'}</Row>
+            <Row label="buyer’s previous" title={r.prevHashClient ?? 'first job on record'}>{r.prevHashClient ? shortHash(r.prevHashClient, 6, 6) : 'first job'}</Row>
           </>
         ) : null}
         <Dash />

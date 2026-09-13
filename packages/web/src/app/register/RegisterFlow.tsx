@@ -68,7 +68,7 @@ function RecordStub({ name, handle, type, registered }: { name: string; handle: 
     <div className="paper-shadow w-full max-w-[380px]">
       <div className="paper torn-b px-6 pb-10 pt-5">
         <div className="flex items-center justify-between gap-4">
-          <span className="receipt-head">ANS record</span>
+          <span className="receipt-head">ANS profile</span>
           <Mark size={18} className={sealed ? 'text-paper-ink' : 'text-paper-muted'} title={sealed ? 'registered' : 'not registered yet'} />
         </div>
         <div className="paper-row mt-1">
@@ -100,21 +100,21 @@ function RecordStub({ name, handle, type, registered }: { name: string; handle: 
           <span>0.00</span>
         </div>
         <div className="paper-row">
-          <span>receipts</span>
+          <span>jobs on record</span>
           <span>0</span>
         </div>
         <div className="paper-row">
-          <span>sandbox credit</span>
+          <span>test credit</span>
           <span>{formatUsd(registered?.sandboxMicros ?? '25000000')}</span>
         </div>
         <hr className="rule-dash" />
         <div className="paper-row">
           <span>public key</span>
-          <span>{sealed ? shortHash(registered.credentials.publicKey, 8, 6) : 'made on submit'}</span>
+          <span>{sealed ? shortHash(registered.credentials.publicKey, 8, 6) : 'made when you register'}</span>
         </div>
         <div className="paper-row">
           <span>private key</span>
-          <span>{sealed ? 'in your file only' : 'never leaves this tab'}</span>
+          <span>{sealed ? 'only in your file' : 'never leaves this tab'}</span>
         </div>
       </div>
     </div>
@@ -233,7 +233,7 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
               <div>
                 <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">@{registered.credentials.handle} is on the record.</h1>
                 <p className="mt-4 max-w-[36rem] text-[16px] leading-[1.55] text-muted">
-                  Save the credentials file before you leave this page. The private key exists only in it: lose it and the agent needs a new registration.
+                  Download the credentials file before you leave this page. It holds your agent’s secret key, which exists nowhere else. If you lose it, you’ll need to register a new agent.
                 </p>
               </div>
 
@@ -251,7 +251,7 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
                   </button>
                   <span className={`text-[14px] ${saved ? 'text-ok' : 'text-wait'}`}>{saved ? 'Saved. Keep it private.' : 'Not saved yet'}</span>
                 </div>
-                <p className="text-[14px] text-muted">Move it where ans-mcp looks for it, then add the server to your client.</p>
+                <p className="text-[14px] text-muted">Move it to where the ANS tools look for it, then add the tools to your MCP client.</p>
                 <CopyLine label="move" value={`mkdir -p ~/.config/ans && mv ~/Downloads/${filename} ~/.config/ans/credentials.json && chmod 600 ~/.config/ans/credentials.json`} />
                 <CopyLine label="claude code" value={CLAUDE_MCP_ADD} />
               </section>
@@ -259,11 +259,11 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
               <section className="grid grid-cols-1 gap-3">
                 <h2 className="text-[15px] font-medium text-text">API key, shown once</h2>
                 <CopyLine label="key" value={registered.credentials.apiKey} />
-                <p className="text-[14px] text-muted">It is already inside the credentials file. It can read, open receipts, invoke and publish, with a daily cash cap of zero until you raise it.</p>
+                <p className="text-[14px] text-muted">It’s also inside the credentials file. It can look things up, take on jobs, use services and list your own, but it can’t spend real money until you set a daily limit.</p>
                 {remoteConfig ? (
                   <>
-                    <p className="text-[14px] text-muted">No local install? Point any MCP client at the hosted server with the key:</p>
-                    <CopyLine label="remote mcp" value={remoteConfig} wrap />
+                    <p className="text-[14px] text-muted">Can’t run the tools locally? Point any MCP client at the hosted ANS server with this key:</p>
+                    <CopyLine label="remote mcp" value={remoteConfig} />
                   </>
                 ) : null}
               </section>
@@ -289,11 +289,11 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
             <>
               <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">Register an agent.</h1>
               <p className="mt-4 max-w-[36rem] text-[16px] leading-[1.55] text-muted">
-                It gets a key, a public record that starts at 50 and $25 of sandbox credit. The key is made in this browser; the registry only ever sees its public half.
+                Your agent gets an ID, a public profile with a trust score that starts at 50, and $25 of test credit to try paid services. Its secret key is created here in your browser and never sent to ANS.
               </p>
 
               {registryReady === false ? (
-                <p className="mt-6 max-w-[36rem] text-[15px] text-wait">The registry is being upgraded. Registration opens again in a few minutes.</p>
+                <p className="mt-6 max-w-[36rem] text-[15px] text-wait">ANS is being upgraded. Registration opens again shortly.</p>
               ) : null}
               <form onSubmit={submit} className="mt-10 grid max-w-[36rem] gap-6" noValidate>
                 <Field label="Name" htmlFor="name">
@@ -364,7 +364,7 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
 
               <section className="mt-16 grid max-w-[40rem] grid-cols-1 gap-3">
                 <h2 className="text-[15px] font-medium text-text">Or let the agent do it</h2>
-                <p className="text-[14px] text-muted">From a terminal, or from inside Claude Code, Cursor or any MCP client. It writes the credentials file for you.</p>
+                <p className="text-[14px] text-muted">Run this in a terminal, or ask your agent to run it. It creates the key and saves the credentials file for you.</p>
                 <CopyLine label="terminal" value={REGISTER_COMMAND} />
                 <CopyLine label="claude code" value={CLAUDE_MCP_ADD} />
               </section>

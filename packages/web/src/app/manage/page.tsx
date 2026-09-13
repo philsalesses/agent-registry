@@ -13,10 +13,10 @@ import CredentialsLoader from '../components/CredentialsLoader';
 import SignedOutPrompt from '../components/SignedOutPrompt';
 
 const SCOPES = [
-  { value: 'read', label: 'read' },
-  { value: 'receipts', label: 'receipts' },
-  { value: 'invoke', label: 'invoke' },
-  { value: 'publish', label: 'publish' },
+  { value: 'read', label: 'look things up' },
+  { value: 'receipts', label: 'take on jobs' },
+  { value: 'invoke', label: 'use services' },
+  { value: 'publish', label: 'list services' },
 ] as const;
 
 const WEBHOOK_EVENTS = ['receipt.proposed', 'receipt.opened', 'receipt.delivered', 'receipt.sealed', 'receipt.disputed', 'invoke.received', 'wallet.credited', 'message.received'] as const;
@@ -171,7 +171,7 @@ function ProfileSection({ agent, onSaved }: { agent: ViewAgent; onSaved: () => v
   }
 
   return (
-    <Section id="profile" title="Profile" lead="What other agents read before they hire yours. The handle and key are fixed.">
+    <Section id="profile" title="Profile" lead="What other agents see before they hire yours. The handle and the key can’t be changed here.">
       <form onSubmit={save} className="grid max-w-[40rem] gap-5">
         <div className="grid gap-2">
           <label htmlFor="p-name" className="text-[14px] text-text">Name</label>
@@ -247,13 +247,13 @@ function PolicySection({ agent, onSaved }: { agent: ViewAgent; onSaved: () => vo
   }
 
   return (
-    <Section id="policy" title="Who it works with" lead="Enforced by the registry on messages, proposed receipts and calls to your offers. Callers get a clear error that tells them how to qualify.">
+    <Section id="policy" title="Who it works with" lead="ANS enforces these rules for you on messages, job proposals and calls to your services. Agents that don’t qualify get told why and how to fix it.">
       <div className="grid max-w-[40rem] gap-6">
-        <Toggle id="pol-reg" checked={requireRegistered} onChange={setRequireRegistered} label="Registered agents only" detail="Anyone without a public ANS record is refused with 428 and a link to register." />
-        <Toggle id="pol-sandbox" checked={acceptSandbox} onChange={setAcceptSandbox} label="Accept sandbox credit" detail="New agents can pay with their $25 sandbox grant. Turn it off to take cash only." />
+        <Toggle id="pol-reg" checked={requireRegistered} onChange={setRequireRegistered} label="Registered agents only" detail="Agents without a public ANS profile are turned away, with a link to register." />
+        <Toggle id="pol-sandbox" checked={acceptSandbox} onChange={setAcceptSandbox} label="Accept test credit" detail="New agents can pay with their $25 of free test credit. Turn this off to accept real money only." />
         <div className="grid gap-2">
           <label htmlFor="pol-min" className="text-[15px] text-text">
-            Minimum trust
+            Minimum trust score
           </label>
           <div className="flex items-center gap-3">
             <input id="pol-min" type="number" min={0} max={100} className="field" style={{ width: "7rem" }} value={minTrust} onChange={(e) => setMinTrust(e.target.value)} />
@@ -339,7 +339,7 @@ function KeysSection({ agentId, hasKey }: { agentId: string; hasKey: boolean }) 
   const active = (keys ?? []).filter((k) => !k.revokedAt);
 
   return (
-    <Section id="keys" title="API keys" lead="For places that cannot hold the private key: a hosted MCP client, a CI job, a teammate’s script. Scoped, capped and revocable.">
+    <Section id="keys" title="API keys" lead="For places that shouldn’t hold your agent’s secret key, like a hosted MCP client or a CI job. Each key has limited permissions and a daily spending cap, and you can revoke it anytime.">
       {keys === null ? (
         <p className="text-[14px] text-muted">Loading keys.</p>
       ) : active.length === 0 ? (
@@ -366,7 +366,7 @@ function KeysSection({ agentId, hasKey }: { agentId: string; hasKey: boolean }) 
       <div className="grid max-w-[40rem] gap-4">
         <h3 className="text-[15px] text-text">Make a key</h3>
         {!hasKey ? (
-          <CredentialsLoader reason="Minting a key needs a request signed by the agent’s own key. Load the credentials file." />
+          <CredentialsLoader reason="Making a key needs your agent’s secret key. Load the credentials file." />
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -375,12 +375,12 @@ function KeysSection({ agentId, hasKey }: { agentId: string; hasKey: boolean }) 
                 <input id="k-label" className="field" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={64} placeholder="cursor on my laptop" />
               </div>
               <div className="grid gap-2">
-                <label htmlFor="k-cap" className="text-[14px] text-text">Daily cash cap, USD</label>
+                <label htmlFor="k-cap" className="text-[14px] text-text">Daily spending limit, USD</label>
                 <input id="k-cap" className="field" value={capUsd} onChange={(e) => setCapUsd(e.target.value)} inputMode="decimal" />
               </div>
             </div>
             <fieldset className="flex flex-wrap gap-x-6 gap-y-2">
-              <legend className="mb-2 text-[14px] text-text">Scopes</legend>
+              <legend className="mb-2 text-[14px] text-text">What this key can do</legend>
               {SCOPES.map((s) => (
                 <label key={s.value} className="flex items-center gap-2 text-[14px] text-muted">
                   <input type="checkbox" className="accent-[#e6e1d4]" checked={scopes.includes(s.value)} onChange={(e) => setScopes((prev) => (e.target.checked ? [...prev, s.value] : prev.filter((x) => x !== s.value)))} />
@@ -400,7 +400,7 @@ function KeysSection({ agentId, hasKey }: { agentId: string; hasKey: boolean }) 
           <div className="grid grid-cols-1 gap-3">
             <p className="text-[14px] text-wait">Shown once. Copy it now.</p>
             <CopyLine label="key" value={minted.key} />
-            <CopyLine label="remote mcp" value={minted.remote} wrap />
+            <CopyLine label="remote mcp" value={minted.remote} />
           </div>
         ) : null}
       </div>
@@ -470,7 +470,7 @@ function WebhooksSection() {
   }
 
   return (
-    <Section id="webhooks" title="Webhooks" lead="Get told the moment a receipt needs you: proposed, delivered, sealed. Deliveries carry an HMAC signature.">
+    <Section id="webhooks" title="Webhooks" lead="Get a message at your own URL the moment a job needs your agent: a new proposal, a delivery to review, a job finished. Each message is signed so you can trust it.">
       {hooks === null ? (
         <p className="text-[14px] text-muted">Loading webhooks.</p>
       ) : hooks.length === 0 ? (
@@ -557,10 +557,10 @@ function RotateSection({ agentId, handle, hasKey }: { agentId: string; handle: s
   }
 
   return (
-    <Section id="rotate" title="Rotate the key" lead="If the private key leaked, replace it. Receipts, trust and API keys stay with the agent.">
+    <Section id="rotate" title="Rotate the key" lead="If your agent’s secret key may have leaked, replace it. Its jobs, trust score and API keys stay with the agent.">
       <div className="grid max-w-[40rem] gap-4">
         {!hasKey ? (
-          <CredentialsLoader reason="Rotation is signed by the current key. Load the credentials file." />
+          <CredentialsLoader reason="Replacing the key needs the current one. Load the credentials file." />
         ) : confirm ? (
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
             <button type="button" className="rounded-sm border border-bad/50 px-4 py-2.5 text-[14px] leading-none text-bad transition-colors hover:border-bad disabled:opacity-50" disabled={busy} onClick={rotate}>

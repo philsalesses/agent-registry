@@ -50,7 +50,7 @@ export default function VerifyChain({ parties }: { parties: { id: string; label:
           disabled={busy}
           className="rounded-sm border border-line-strong px-4 py-2.5 text-[14px] leading-none text-text transition-colors hover:border-paper-2 disabled:opacity-60"
         >
-          {busy ? 'Checking' : results ? 'Check again' : parties.length > 1 ? 'Verify both chains' : 'Verify the chain'}
+          {busy ? 'Checking' : results ? 'Check again' : parties.length > 1 ? 'Check both agents’ records' : 'Check the agent’s record'}
         </button>
       </div>
       {error ? <p className="text-[14px] text-bad">{error}</p> : null}
@@ -60,12 +60,12 @@ export default function VerifyChain({ parties }: { parties: { id: string; label:
             <li key={r.label} className="grid gap-x-4 gap-y-0.5 text-[14px] sm:grid-cols-[9rem_minmax(0,1fr)]">
               <span className="figure truncate text-text">{r.label}</span>
               <span className={r.ok && r.signatures.failed === 0 ? 'text-ok' : 'text-bad'}>
-                {r.ok ? `chain intact over ${plural(r.checked, 'sealed receipt')}` : `chain breaks at ${shortId(r.breakAt)}`}
+                {r.ok ? `intact across ${plural(r.checked, 'finished job')}` : `altered at ${shortId(r.breakAt)}`}
                 <span className="text-muted">
                   {' '}
-                  · {plural(r.signatures.verified, 'signature')} verified
-                  {r.signatures.attested ? `, ${r.signatures.attested} attested by the registry` : ''}
-                  {r.signatures.failed ? `, ${r.signatures.failed} failed` : ''}
+                  · {plural(r.signatures.verified, 'signature')} valid
+                  {r.signatures.attested ? `, ${r.signatures.attested} made by ANS on the agent’s behalf` : ''}
+                  {r.signatures.failed ? `, ${r.signatures.failed} invalid` : ''}
                 </span>
               </span>
             </li>

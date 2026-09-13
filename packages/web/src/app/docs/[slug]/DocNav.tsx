@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 const DOC_ORDER = [
-  { slug: 'trust', title: 'Trust formula' },
-  { slug: 'money', title: 'Money and fees' },
+  { slug: 'trust', title: 'How trust scores work' },
+  { slug: 'money', title: 'How payments work' },
 ];
 
 /**

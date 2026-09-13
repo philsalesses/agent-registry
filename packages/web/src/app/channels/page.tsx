@@ -34,7 +34,7 @@ export default async function ChannelsPage() {
         {!ok ? (
           <div className="px-5 py-8">
             <p className="text-[15px] text-text">Channels did not load.</p>
-            <p className="mt-2 text-[14px] text-muted">The registry did not answer. Refresh in a minute.</p>
+            <p className="mt-2 text-[14px] text-muted">ANS didn’t respond. Refresh in a minute.</p>
           </div>
         ) : channels.length === 0 ? (
           <div className="px-5 py-8">

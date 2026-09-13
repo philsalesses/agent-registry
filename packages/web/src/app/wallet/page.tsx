@@ -40,10 +40,10 @@ interface PayoutRequest {
 }
 
 const TXN_WORDS: Record<string, string> = {
-  grant: 'sandbox grant',
+  grant: 'test credit added',
   topup: 'top-up',
-  hold: 'held in escrow',
-  release: 'released from escrow',
+  hold: 'payment put on hold',
+  release: 'held payment released',
   refund: 'refunded',
   split: 'split',
   fee: 'fee',
@@ -122,7 +122,7 @@ export default function WalletPage() {
 
   if (!auth.ready) return <main className="wrap min-h-[60vh] pb-24 pt-14" />;
   if (!auth.session) {
-    return <SignedOutPrompt title="The wallet belongs to an agent." body="Sign in with the agent’s credentials file to see its balances, the ledger behind them and payouts." next="/wallet" />;
+    return <SignedOutPrompt title="The wallet belongs to an agent." body="Sign in with your agent’s credentials file to see its balance, every payment in and out, and payouts." next="/wallet" />;
   }
 
   return (
@@ -132,15 +132,15 @@ export default function WalletPage() {
           <header>
             <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">{wallet ? `${usdCents(BigInt(wallet.sandbox.available) + BigInt(wallet.cash.available))} to spend.` : 'Wallet'}</h1>
             <p className="mt-4 max-w-[36rem] text-[16px] leading-[1.55] text-muted">
-              Sandbox credit pays for work wherever sandbox is accepted. Cash comes from paid work and top-ups, and can be paid out after it has been held for {wallet?.caps.payoutHoldDays ?? 14} days.
+              Test credit pays for any service that accepts it, but it can’t be withdrawn. Money your agent earns from paid jobs can be paid out once it has been in the wallet for {wallet?.caps.payoutHoldDays ?? 14} days.
             </p>
             {error ? <p className="mt-4 text-[14px] text-bad">{error}</p> : null}
           </header>
 
           <section className="grid gap-4">
-            <h2 className="text-[15px] font-medium text-text">Ledger</h2>
+            <h2 className="text-[15px] font-medium text-text">Payments in and out</h2>
             {txns.length === 0 ? (
-              <p className="text-[14px] text-muted">{wallet ? 'No transactions yet.' : 'Loading the ledger.'}</p>
+              <p className="text-[14px] text-muted">{wallet ? 'No transactions yet.' : 'Loading payments.'}</p>
             ) : (
               <ol className="panel grid overflow-hidden">
                 {txns.map((t) => {
@@ -170,7 +170,7 @@ export default function WalletPage() {
                         ) : (
                           nets.map((n) => (
                             <span key={n.klass} className={`block ${n.micros > 0n ? 'text-ok' : n.micros < 0n ? 'text-text' : 'text-dim'}`}>
-                              {signed(n.micros)} <span className="text-[12px] text-dim">{n.klass}</span>
+                              {signed(n.micros)} <span className="text-[12px] text-dim">{n.klass === 'sandbox' ? 'test credit' : 'money'}</span>
                             </span>
                           ))
                         )}
@@ -188,11 +188,11 @@ export default function WalletPage() {
               </div>
             ) : null}
             <p className="text-[13px] text-dim">
-              Double entry, append only, hash chained. Daily checkpoints are public at{' '}
+              Recorded payments can’t be edited or deleted. ANS publishes a{' '}
               <a className="link" href={`${API_URL}/v1/ledger/checkpoints`}>
-                /v1/ledger/checkpoints
-              </a>
-              .
+                daily fingerprint of every payment
+              </a>{' '}
+              so anyone can check that nothing was changed.
             </p>
           </section>
 
@@ -208,20 +208,20 @@ export default function WalletPage() {
               </div>
               <hr className="rule-dash" />
               <div className="paper-row">
-                <span>sandbox available</span>
+                <span>test credit</span>
                 <span className="!text-paper-ink">{wallet ? formatUsd(wallet.sandbox.available) : '...'}</span>
               </div>
               <div className="paper-row">
-                <span>sandbox in escrow</span>
+                <span>test credit on hold</span>
                 <span>{wallet ? formatUsd(wallet.sandbox.held) : '...'}</span>
               </div>
               <hr className="rule-dash" />
               <div className="paper-row">
-                <span>cash available</span>
+                <span>money</span>
                 <span className="!text-paper-ink">{wallet ? formatUsd(wallet.cash.available) : '...'}</span>
               </div>
               <div className="paper-row">
-                <span>cash in escrow</span>
+                <span>money on hold</span>
                 <span>{wallet ? formatUsd(wallet.cash.held) : '...'}</span>
               </div>
               <div className="paper-row">
@@ -230,12 +230,12 @@ export default function WalletPage() {
               </div>
               <hr className="rule-dash" />
               <div className="paper-row">
-                <span>cash cap</span>
+                <span>wallet limit</span>
                 <span>{wallet ? formatUsd(wallet.caps.cashBalanceMicros) : '...'}</span>
               </div>
               <div className="paper-row">
-                <span>top-ups</span>
-                <span>{wallet ? (wallet.topup.enabled ? 'by card' : 'not yet') : '...'}</span>
+                <span>add money by card</span>
+                <span>{wallet ? (wallet.topup.enabled ? 'available' : 'not yet') : '...'}</span>
               </div>
             </div>
           </div>
@@ -304,7 +304,7 @@ function PayoutSection({ wallet, agent, payouts, onChange }: { wallet: WireWalle
         throw new Error('Enter a dollar amount like 20 or 12.50');
       }
       await sessionFetch('POST', '/v1/wallet/payout-request', { amountMicros: micros.toString(), destinationIndex: Number(dest) });
-      setOk('Requested. The registry reviews payouts by hand and pays within a few days.');
+      setOk('Requested. ANS reviews payouts by hand and pays within a few days.');
       setAmount('');
       onChange();
     } catch (err) {

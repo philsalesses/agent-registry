@@ -28,18 +28,18 @@ interface TrustBreakdown {
 
 const OUTCOME_LABELS: Record<string, string> = {
   accepted_rated: 'accepted and rated',
-  accepted: 'accepted without a rating',
+  accepted: 'accepted, no rating',
   unreviewed: 'delivered, never reviewed',
-  unreviewed_invoke: 'calls nobody reviewed',
-  resolved_provider: 'upheld in a dispute',
-  resolved_client: 'refunded after a rejection',
-  dispute_lost: 'lost a dispute',
+  unreviewed_invoke: 'service calls nobody reviewed',
+  resolved_provider: 'won an appeal',
+  resolved_client: 'rejected, buyer refunded',
+  dispute_lost: 'lost an appeal',
   timed_out: 'missed the deadline',
-  cancelled_provider: 'cancelled as provider',
-  cancelled_client: 'cancelled as client',
-  split: 'split in a dispute',
-  failed: 'failed calls',
-  output_invalid: 'output broke its schema',
+  cancelled_provider: 'cancelled as seller',
+  cancelled_client: 'cancelled as buyer',
+  split: 'payment split after appeal',
+  failed: 'service call failed',
+  output_invalid: 'result in the wrong format',
 };
 
 function one(v: string | string[] | undefined): string | undefined {
@@ -55,7 +55,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const agent = await getAgent(decodeURIComponent(id));
   if (!agent) return { title: 'Agent not found', robots: { index: false } };
   const title = agent.handle ? `${agent.name} (@${agent.handle})` : agent.name;
-  const description = `Trust ${agent.trust.score} at confidence ${confidenceLabel(agent.trust.confidence)} from ${plural(agent.receiptCounts.confirmed, 'confirmed receipt')}. ${agent.description ?? ''}`.trim().slice(0, 200);
+  const description = `Trust score ${agent.trust.score}, confidence ${confidenceLabel(agent.trust.confidence)}, from ${plural(agent.receiptCounts.confirmed, 'job')} on record. ${agent.description ?? ''}`.trim().slice(0, 200);
   return {
     title,
     description,
@@ -70,56 +70,51 @@ function RecordSlip({ agent, trust }: { agent: ViewAgent; trust: TrustBreakdown 
   const counts = trust?.receiptCounts ?? agent.receiptCounts;
   const score = trust?.score ?? agent.trust.score;
   const confidence = trust?.confidence ?? agent.trust.confidence;
-  const rank = trust?.rank ?? agent.trust.rank;
   const accepts = agent.policy.requireRegistered ? 'registered agents' : 'anyone';
   return (
     <div className="paper-shadow w-full max-w-[360px]">
       <div className="paper torn-b px-6 pb-10 pt-5">
         <div className="flex items-center justify-between gap-4">
-          <span className="receipt-head">ANS record</span>
+          <span className="receipt-head">ANS profile</span>
           <SealMark size={18} className="text-paper-ink" title="registered" />
         </div>
         <div className="paper-row mt-1">
           <span className="!text-paper-ink">{who(agent)}</span>
-          <span>since {isoDate(agent.createdAt)}</span>
+          <span>joined {isoDate(agent.createdAt)}</span>
         </div>
         <hr className="rule-dash" />
         {agent.isHouse ? (
           <div className="paper-row">
-            <span>trust</span>
-            <span>house, unranked</span>
+            <span>trust score</span>
+            <span>run by ANS, not scored</span>
           </div>
         ) : (
           <>
             <div className="paper-row">
-              <span>trust</span>
-              <span className="!text-paper-ink font-semibold">{score}</span>
+              <span>trust score</span>
+              <span className="!text-paper-ink font-semibold">{score} of 100</span>
             </div>
             <div className="paper-row">
               <span>confidence</span>
               <span>{confidenceLabel(confidence)}</span>
             </div>
-            <div className="paper-row">
-              <span>rank</span>
-              <span>{rank.toFixed(1)}</span>
-            </div>
           </>
         )}
         <hr className="rule-dash" />
         <div className="paper-row">
-          <span>confirmed receipts</span>
+          <span>jobs on record</span>
           <span>{counts.confirmed}</span>
         </div>
         <div className="paper-row">
-          <span>negative outcomes</span>
+          <span>jobs that went badly</span>
           <span className={counts.negative > 0 ? '!text-paper-bad' : ''}>{counts.negative}</span>
         </div>
         <div className="paper-row">
-          <span>delivered, unreviewed</span>
+          <span>buyers never reviewed</span>
           <span>{counts.unreviewed}</span>
         </div>
         <div className="paper-row">
-          <span>left no review</span>
+          <span>it never reviewed</span>
           <span className={counts.noReview > 0 ? '!text-paper-wait' : ''}>{counts.noReview}</span>
         </div>
         <hr className="rule-dash" />
@@ -128,16 +123,16 @@ function RecordSlip({ agent, trust }: { agent: ViewAgent; trust: TrustBreakdown 
           <span>{accepts}</span>
         </div>
         <div className="paper-row">
-          <span>minimum trust</span>
+          <span>minimum trust score</span>
           <span>{agent.policy.minTrust || 'none'}</span>
         </div>
         <div className="paper-row">
-          <span>sandbox credit</span>
-          <span>{agent.policy.acceptSandbox ? 'accepted' : 'refused'}</span>
+          <span>test credit</span>
+          <span>{agent.policy.acceptSandbox ? 'accepted' : 'not accepted'}</span>
         </div>
         <div className="paper-row">
           <span>vouches</span>
-          <span>{agent.vouches} · no weight</span>
+          <span>{agent.vouches}, don’t count</span>
         </div>
         <hr className="rule-dash" />
         <div className="paper-row">
@@ -151,9 +146,9 @@ function RecordSlip({ agent, trust }: { agent: ViewAgent; trust: TrustBreakdown 
 
 function Tabs({ base, active, counts }: { base: string; active: string; counts: { receipts: number; offers: number } }) {
   const items = [
-    { key: 'receipts', label: 'Receipts', n: counts.receipts },
-    { key: 'offers', label: 'Offers', n: counts.offers },
-    { key: 'trust', label: 'Trust', n: null },
+    { key: 'receipts', label: 'Jobs', n: counts.receipts },
+    { key: 'offers', label: 'Services', n: counts.offers },
+    { key: 'trust', label: 'Trust score', n: null },
   ];
   return (
     <nav aria-label="Profile sections" className="flex flex-wrap gap-1">
@@ -200,7 +195,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
           <h1 className="display text-[clamp(2.4rem,5vw,4rem)]">{agent.name}</h1>
           <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[15px] text-muted">
             {agent.handle ? <span className="figure text-text">@{agent.handle}</span> : null}
-            <span>{agent.isHouse ? 'house agent run by the registry' : agent.type}</span>
+            <span>{agent.isHouse ? 'free services run by ANS' : `${agent.type} agent`}</span>
             {agent.operatorName ? <span>operated by {agent.operatorName}</span> : null}
             {agent.homepage ? (
               <a className="link" href={agent.homepage} rel="nofollow noopener" target="_blank">
@@ -218,9 +213,9 @@ export default async function AgentPage({ params, searchParams }: Props) {
             <section className="mt-6">
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px]">
                 {[
-                  { r: undefined, label: 'all' },
-                  { r: 'provider', label: 'as provider' },
-                  { r: 'client', label: 'as client' },
+                  { r: undefined, label: 'all jobs' },
+                  { r: 'provider', label: 'work it did' },
+                  { r: 'client', label: 'work it bought' },
                 ].map((f) => (
                   <Link
                     key={f.label}
@@ -243,12 +238,12 @@ export default async function AgentPage({ params, searchParams }: Props) {
                 </ol>
               ) : (
                 <p className="mt-6 max-w-[34rem] text-[15px] text-muted">
-                  {cursor ? 'No older receipts.' : `No public receipts ${role ? `as ${role} ` : ''}yet. When ${who(agent)} does or buys work, the receipts land here.`}
+                  {cursor ? 'No older jobs.' : `No jobs here yet. When ${who(agent)} ${role === 'client' ? 'buys work' : role === 'provider' ? 'does work' : 'does or buys work'} through ANS, each job shows up here with its receipt.`}
                 </p>
               )}
               {receiptPage.nextCursor ? (
                 <Link href={`${base}?${new URLSearchParams({ ...(role ? { role } : {}), cursor: receiptPage.nextCursor })}`} className="link mt-6 inline-block text-[15px]">
-                  Older receipts
+                  Older jobs
                 </Link>
               ) : null}
             </section>
@@ -261,7 +256,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
                 showOwner={false}
                 empty={
                   <p className="text-[15px] text-muted">
-                    {who(agent)} publishes no offers. Work still leaves receipts when it is agreed directly.
+                    {who(agent)} doesn’t list any services. Other agents can still hire it directly, and those jobs are recorded too.
                   </p>
                 }
               />
@@ -271,17 +266,17 @@ export default async function AgentPage({ params, searchParams }: Props) {
           {tab === 'trust' ? (
             <section className="mt-6 grid gap-8">
               {agent.isHouse ? (
-                <p className="max-w-[36rem] text-[15px] text-muted">House agents are labeled and unranked. Their calls still leave receipts, so the counts are public.</p>
+                <p className="max-w-[36rem] text-[15px] text-muted">This agent runs ANS’s own free services, so it isn’t scored or ranked. Every use still gets a receipt.</p>
               ) : (
                 <p className="max-w-[38rem] text-[16px] leading-[1.55] text-text">
-                  Score {trust?.score ?? agent.trust.score} from {plural(trust?.n ?? 0, 'counted receipt')}, at confidence {confidenceLabel(trust?.confidence ?? agent.trust.confidence)}. Every agent starts at 50 with two phantom receipts; real ones pull the score toward what partners actually said.
+                  {who(agent)} has a trust score of {trust?.score ?? agent.trust.score} from {plural(trust?.n ?? 0, 'finished job')}, with confidence {confidenceLabel(trust?.confidence ?? agent.trust.confidence)}. Every agent starts at 50. Each finished job pulls the score toward how that job went, and jobs with more money at stake pull harder. The weight column shows how much each kind of job counts.
                 </p>
               )}
               {outcomes.length > 0 ? (
                 <div className="panel overflow-hidden">
                   <div className="grid grid-cols-[minmax(0,1fr)_5rem_6rem] gap-x-6 px-4 pb-2 pt-4 text-[12px] text-dim">
-                    <span>outcome</span>
-                    <span className="text-right">receipts</span>
+                    <span>how the job ended</span>
+                    <span className="text-right">jobs</span>
                     <span className="text-right">weight</span>
                   </div>
                   <ul className="grid pb-2">
@@ -295,20 +290,20 @@ export default async function AgentPage({ params, searchParams }: Props) {
                   </ul>
                 </div>
               ) : (
-                <p className="text-[15px] text-muted">No finished receipts count toward the score yet.</p>
+                <p className="text-[15px] text-muted">No finished jobs count toward the score yet, so it’s still the starting 50.</p>
               )}
               {trust ? (
                 <dl className="grid max-w-[36rem] gap-2 text-[14px]">
                   <div className="flex justify-between gap-6">
-                    <dt className="text-muted">weight from free and sandbox work</dt>
+                    <dt className="text-muted">weight from free and test-credit jobs</dt>
                     <dd className="figure text-text">{(trust.freeWeightUsed ?? 0).toFixed(2)} of 1.00</dd>
                   </div>
                   <div className="flex justify-between gap-6">
-                    <dt className="text-muted">weight from unreviewed calls</dt>
+                    <dt className="text-muted">weight from calls nobody reviewed</dt>
                     <dd className="figure text-text">{(trust.unreviewedWeightUsed ?? 0).toFixed(2)} of 2.00</dd>
                   </div>
                   <div className="flex justify-between gap-6">
-                    <dt className="text-muted">computed</dt>
+                    <dt className="text-muted">last updated</dt>
                     <dd className="figure text-text">{trust.lastComputed ? isoDate(trust.lastComputed) : 'on the next receipt'}</dd>
                   </div>
                 </dl>
@@ -316,7 +311,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
               <div className="grid gap-3">
                 <CopyLine label="breakdown" value={`curl ${API_URL}/v1/agents/${key}/trust`} />
                 <Link href="/docs/trust" className="link text-[15px]">
-                  How the formula works
+                  How the score is calculated
                 </Link>
               </div>
             </section>
@@ -329,7 +324,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
           </div>
           <div className="grid w-full max-w-[360px] grid-cols-1 gap-3 lg:ml-auto">
             <p className="text-[14px] text-muted">
-              Check {who(agent)} before you hire it, or show the record where you work.
+              Check {who(agent)}’s record from code before your agent hires it, or show this record on your own site.
               {agent.handle && !agent.isHouse ? (
                 <>
                   {' '}
@@ -340,8 +335,8 @@ export default async function AgentPage({ params, searchParams }: Props) {
                 </>
               ) : null}
             </p>
-            <CopyLine label="verify" value={`curl ${API_URL}/v1/verify/${key}`} />
-            <CopyLine label="badge" value={`[![ANS trust](${API_URL}/v1/agents/${agent.id}/card?style=badge)](${WEB_URL}/agent/${key})`} />
+            <CopyLine label="check" value={`curl ${API_URL}/v1/verify/${key}`} />
+            <CopyLine label="badge" value={`[![ANS trust score](${API_URL}/v1/agents/${agent.id}/card?style=badge)](${WEB_URL}/agent/${key})`} />
           </div>
         </aside>
       </div>

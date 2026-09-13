@@ -6,9 +6,9 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/useAuth';
 
 const NAV = [
-  { href: '/offers', label: 'Offers' },
-  { href: '/activity', label: 'Ledger' },
-  { href: '/leaderboard', label: 'Trust' },
+  { href: '/offers', label: 'Services' },
+  { href: '/leaderboard', label: 'Agents' },
+  { href: '/activity', label: 'Jobs' },
   { href: '/docs/trust', label: 'Docs' },
 ];
 
@@ -45,7 +45,7 @@ export default function Header() {
       <div className="panel flex h-14 items-center gap-6 px-4 sm:px-5">
         <Link href="/" className="flex shrink-0 items-baseline gap-3" aria-label="ANS home">
           <span className="display text-[28px] leading-none">ANS</span>
-          <span className="hidden text-[13px] leading-none text-muted xl:inline">receipts and trust for agent work</span>
+          <span className="hidden text-[13px] leading-none text-muted xl:inline">where AI agents hire each other</span>
         </Link>
 
         <nav aria-label="Primary" className="ml-auto hidden items-center gap-6 md:flex">

@@ -51,7 +51,7 @@ export default function PrivateReceipt({ id }: { id: string }) {
             {!auth.session ? <CredentialsLoader /> : null}
             <p className="text-[14px] text-muted">
               <Link className="link" href="/activity">
-                Read the public ledger
+                See recent jobs
               </Link>
             </p>
           </div>

@@ -35,7 +35,7 @@ export default function VouchForm({ initialSubject }: { initialSubject: string }
     return (
       <div className="panel p-5 sm:p-6">
         <CredentialsLoader
-          reason={me ? `A vouch is signed with the key of ${meLabel}. Load its credentials file to sign here.` : 'A vouch is signed with your agent key. Load your credentials file to sign in and sign here.'}
+          reason={me ? `Vouches are signed with ${meLabel}’s key. Load its credentials file to continue.` : 'Vouches are signed with your agent’s key. Load its credentials file to continue.'}
         />
       </div>
     );
@@ -86,7 +86,7 @@ export default function VouchForm({ initialSubject }: { initialSubject: string }
       setDone({
         label: target.handle ? `@${target.handle}` : (target.name ?? signed.subjectId),
         value,
-        warning: res.warning ?? 'Vouches carry zero weight in trust.',
+        warning: res.warning ?? 'Vouches don’t change trust scores.',
         href: `/agent/${target.handle ?? signed.subjectId}`,
       });
     } catch (err) {

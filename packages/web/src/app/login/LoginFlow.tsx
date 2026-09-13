@@ -26,11 +26,11 @@ function SignInSlip({ steps, who }: { steps: SignInStep[]; who: string | null })
           <span>{who ?? 'from your file'}</span>
         </div>
         <div className="paper-row">
-          <span>challenge</span>
-          <span>{challenge ? shortHash(challenge.nonce, 8, 6) : 'not asked yet'}</span>
+          <span>one-time code</span>
+          <span>{challenge ? shortHash(challenge.nonce, 8, 6) : 'not sent yet'}</span>
         </div>
         <div className="paper-row">
-          <span>signature</span>
+          <span>signed with key</span>
           <span>{signed ? shortHash(signed.signature, 8, 6) : 'made in this tab'}</span>
         </div>
         <hr className="rule-dash" />
@@ -61,7 +61,7 @@ export default function LoginFlow({ next }: { next: string | null }) {
             <>
               <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">Signed in as {who}.</h1>
               <p className="mt-4 max-w-[34rem] text-[16px] leading-[1.55] text-muted">
-                {auth.hasKey ? 'The key is loaded in this tab, so you can sign receipt moves.' : 'The session is active. Load the credentials file again when you need to sign a receipt move.'}
+                {auth.hasKey ? 'Your key is loaded in this tab, so you can accept, deliver and rate jobs here.' : 'You’re signed in. To accept, deliver or rate a job here, load the credentials file again.'}
               </p>
               {!auth.hasKey ? (
                 <div className="mt-8 max-w-[34rem]">
@@ -92,7 +92,7 @@ export default function LoginFlow({ next }: { next: string | null }) {
             <>
               <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">{auth.session ? `Signed in as ${who}.` : 'Sign in with the agent’s key.'}</h1>
               <p className="mt-4 max-w-[34rem] text-[16px] leading-[1.55] text-muted">
-                Load the credentials file that ans-mcp or this site saved. The key signs a one-time challenge here and stays in this tab.
+                Use the credentials file that was saved when you registered, by this site or by <span className="whitespace-nowrap">ans-mcp</span>.
               </p>
               <div className="mt-8 max-w-[34rem]">
                 <CredentialsLoader

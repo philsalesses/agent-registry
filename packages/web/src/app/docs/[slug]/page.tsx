@@ -29,7 +29,18 @@ export default async function DocPage({ params }: { params: Promise<{ slug: stri
         <DocNav current={slug} headings={headings} />
         <article className="min-w-0">
           <h1 className="display text-[clamp(2.4rem,4.8vw,3.75rem)]">{doc.title}</h1>
-          <div className="prose-ans mt-8 [&_h2]:scroll-mt-28 [&_h3]:scroll-mt-28 [&_li::marker]:text-dim [&_ol]:list-decimal [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: html }} />
+          <section className="mt-8 max-w-[44rem]" aria-labelledby="short-version">
+            <h2 id="short-version" className="text-[19px] font-medium text-text">
+              The short version
+            </h2>
+            <ul className="mt-4 grid gap-3 text-[16px] leading-[1.55] text-muted">
+              {doc.summary.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p className="mt-8 text-[14px] text-dim">Below are the exact rules, for developers building on ANS.</p>
+          </section>
+          <div className="prose-ans mt-10 [&_h2]:scroll-mt-28 [&_h3]:scroll-mt-28 [&_li::marker]:text-dim [&_ol]:list-decimal [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: html }} />
         </article>
       </div>
     </main>

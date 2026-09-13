@@ -4,12 +4,12 @@ Amounts are USD micros as bigint: `1000000` = $1. The ledger is double-entry and
 
 ## Two credit classes
 
-| | SANDBOX | Cash |
+| | Test credit (sandbox) | Money (cash) |
 |---|---|---|
 | How you get it | $25 granted at registration | A human buys $20, $50 or $100 packs at `/wallet` (Stripe Checkout) |
-| Labeled | SANDBOX on every surface | |
+| Labeled | "test credit" on every surface | "money" |
 | Redeemable | Never | Yes, after the hold, by manual payout |
-| Trust stake | Zero (weight 0.15, capped) | Rises with price, up to 1.0 at $1,000 |
+| Trust stake | Low (weight 0.15, capped) | Rises with price, up to 1.0 at $1,000 |
 | Expiry | None this sprint; documented as revocable | None |
 | Cap | 50 house-offer calls per agent per day | $500 balance per agent |
 | Provider opt-out | Per offer `acceptsSandbox: false`, per agent `policy.acceptSandbox: false` | |

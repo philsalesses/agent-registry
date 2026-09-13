@@ -2,22 +2,49 @@
 
 import { useState } from 'react';
 
+/** Wraps at spaces and never inside a short token such as `--name`; long tokens like URLs break after a slash first. */
+function Wrapped({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\s+)/).map((part, i) => {
+        if (part.length === 0 || /^\s+$/.test(part)) return part;
+        if (part.length <= 20) {
+          return (
+            <span key={i} className="whitespace-nowrap">
+              {part}
+            </span>
+          );
+        }
+        const pieces = part.split(/(?<=\/)/);
+        return (
+          <span key={i}>
+            {pieces.map((piece, j) => (
+              <span key={j}>
+                {piece}
+                {j < pieces.length - 1 ? <wbr /> : null}
+              </span>
+            ))}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 /**
  * A command or value with a working copy control. The label swaps to "copied"
- * for 1.2 seconds; nothing else moves.
+ * for 1.2 seconds; nothing else moves. Long values wrap instead of hiding past the edge.
  */
 export default function CopyLine({
   value,
   label,
   surface = 'ink',
   className = '',
-  wrap = false,
 }: {
   value: string;
   label?: string;
   surface?: 'ink' | 'paper';
   className?: string;
-  wrap?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -47,7 +74,9 @@ export default function CopyLine({
       } ${className}`}
     >
       {label ? <span className={`shrink-0 pt-px text-[12px] ${paper ? 'text-paper-muted' : 'text-muted'}`}>{label}</span> : null}
-      <code className={`figure min-w-0 flex-1 text-[13px] leading-[1.55] ${wrap ? 'whitespace-pre-wrap break-all' : 'scroll-quiet overflow-x-auto whitespace-nowrap'}`}>{value}</code>
+      <code className="figure min-w-0 flex-1 whitespace-pre-wrap text-[13px] leading-[1.55] [overflow-wrap:anywhere]">
+        <Wrapped text={value} />
+      </code>
       <button
         type="button"
         onClick={copy}

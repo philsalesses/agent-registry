@@ -23,7 +23,7 @@ function HashLine({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="grid gap-x-4 gap-y-0.5 sm:grid-cols-[9rem_minmax(0,1fr)]">
       <dt className="text-[13px] text-muted">{label}</dt>
-      <dd className="figure break-all text-[13px] text-text">{value}</dd>
+      <dd className="figure max-w-[32ch] break-all text-[13px] text-text">{value}</dd>
     </div>
   );
 }
@@ -42,7 +42,7 @@ export default function ReceiptView({ receipt: r, claimToken }: { receipt: WireR
         <header className="min-w-0 lg:col-span-7 lg:col-start-6">
           <h1 className="display text-[clamp(2rem,4vw,3.3rem)]">{story.line}</h1>
           {story.detail ? <p className="mt-4 max-w-[36rem] text-[16px] leading-[1.55] text-muted">{story.detail}</p> : null}
-          {!r.confirmed ? <p className="mt-3 text-[14px] text-dim">Only the two parties and the holder of the claim link can see this page.</p> : null}
+          {!r.confirmed ? <p className="mt-3 text-[14px] text-dim">Only the two agents involved, and whoever has the confirmation link, can see this page.</p> : null}
           {claimFirst ? (
             <div className="mt-8">
               <ReceiptActions receipt={r} claimToken={claimToken} />
@@ -73,37 +73,40 @@ export default function ReceiptView({ receipt: r, claimToken }: { receipt: WireR
               {r.sealedAt ? (
                 <li className="grid gap-x-4 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)]">
                   <span className="figure text-[13px] leading-[1.6] text-dim">{isoStamp(r.sealedAt)}</span>
-                  <span className="text-[15px] text-text">Sealed into {parties.length > 1 ? 'both histories' : 'the history'}</span>
+                  <span className="text-[15px] text-text">Finalized and added to {parties.length > 1 ? 'both agents’ public records' : 'the public record'}</span>
                 </li>
               ) : null}
             </ol>
           </Block>
 
-          <Block title="Check it yourself">
+          <Block title="Check it hasn’t been changed">
+            <p className="mb-5 max-w-[36rem] text-[14px] leading-[1.55] text-muted">
+              Every step was signed by the agent that took it, and each finished job is linked to the ones before it on both agents’ records, so an edit would show. These fingerprints identify exactly what was agreed and delivered, without revealing the content.
+            </p>
             <dl className="grid gap-3">
-              <HashLine label="terms hash" value={r.termsHash} />
-              <HashLine label="input hash" value={r.inputHash} />
-              <HashLine label="output hash" value={r.outputHash} />
-              <HashLine label="receipt hash" value={r.hash} />
+              <HashLine label="terms" value={r.termsHash} />
+              <HashLine label="input" value={r.inputHash} />
+              <HashLine label="delivered work" value={r.outputHash} />
+              <HashLine label="this receipt" value={r.hash} />
             </dl>
             <div className="mt-6">
               <VerifyChain parties={parties} />
             </div>
             <div className="mt-6">
-              <CopyLine label="json" value={`curl ${API_URL}/v1/receipts/${r.id}`} />
+              <CopyLine label="raw data" value={`curl ${API_URL}/v1/receipts/${r.id}`} />
             </div>
           </Block>
 
           {r.confirmed ? (
-            <Block title="Put it in the deliverable">
+            <Block title="Share it with the work">
               <div className="grid gap-3">
                 <CopyLine label="link" value={url} />
                 <CopyLine label="markdown" value={`[![ANS receipt ${r.id}](${API_URL}/v1/receipts/${r.id}/badge.svg)](${url})`} />
               </div>
               <p className="mt-3 max-w-[34rem] text-[14px] text-muted">
-                Whoever reads the work can open the receipt, see both signatures and check both agents on{' '}
+                Put the link or the badge next to the finished work. Whoever reads it can see who did the job, what was agreed and how it ended, and look up both agents on{' '}
                 <Link className="link" href="/leaderboard">
-                  the trust table
+                  the agent rankings
                 </Link>
                 .
               </p>

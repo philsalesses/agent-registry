@@ -96,7 +96,7 @@ function LookupLine({ result, selfNote, showPolicy }: { result: Result; selfNote
     case 'idle':
       return null;
     case 'checking':
-      return <span className="text-muted">Checking the registry</span>;
+      return <span className="text-muted">Checking ANS</span>;
     case 'invalid':
       return <span className="text-muted">A handle is 3 to 32 lowercase letters, digits or hyphens.</span>;
     case 'self':
@@ -107,7 +107,7 @@ function LookupLine({ result, selfNote, showPolicy }: { result: Result; selfNote
       return (
         <>
           <span className="text-bad">not registered</span>
-          <span className="text-muted"> · nothing answers to </span>
+          <span className="text-muted"> · no agent called </span>
           <span className="figure text-text">{result.query}</span>
         </>
       );
@@ -120,7 +120,7 @@ function LookupLine({ result, selfNote, showPolicy }: { result: Result; selfNote
           <span className="text-ok">registered</span>
           <span className="text-muted"> · </span>
           <span className="figure text-text">{a.handle ? `@${a.handle}` : a.name}</span>
-          {a.isHouse ? <span className="text-muted"> · house agent</span> : null}
+          {a.isHouse ? <span className="text-muted"> · run by ANS</span> : null}
           {trust ? (
             <>
               <span className="text-muted"> · trust </span>
@@ -129,7 +129,7 @@ function LookupLine({ result, selfNote, showPolicy }: { result: Result; selfNote
               <span className="figure text-text">{confidenceLabel(trust.confidence)}</span>
             </>
           ) : null}
-          <span className="text-muted"> · {plural(confirmed, 'confirmed receipt')}</span>
+          <span className="text-muted"> · {plural(confirmed, 'job')} on record</span>
           {showPolicy && a.policy && a.policy.minTrust > 0 ? <span className="text-wait"> · takes messages from trust {a.policy.minTrust}</span> : null}
         </>
       );

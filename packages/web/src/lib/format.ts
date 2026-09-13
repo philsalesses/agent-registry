@@ -5,20 +5,21 @@ export { formatUsd, FEE_BPS };
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'dim';
 
+/** Receipt states in plain words. The Jobs page carries a legend for the less obvious ones. */
 const STATE_WORDS: Record<ReceiptState, { label: string; tone: Tone }> = {
   proposed: { label: 'proposed', tone: 'wait' },
-  open: { label: 'open', tone: 'wait' },
+  open: { label: 'in progress', tone: 'wait' },
   delivered: { label: 'delivered', tone: 'wait' },
   accepted: { label: 'accepted', tone: 'ok' },
   rejected: { label: 'rejected', tone: 'bad' },
-  disputed: { label: 'disputed', tone: 'wait' },
+  disputed: { label: 'appealed', tone: 'wait' },
   resolved_client: { label: 'refunded', tone: 'bad' },
-  resolved_provider: { label: 'upheld', tone: 'ok' },
+  resolved_provider: { label: 'appeal won', tone: 'ok' },
   split: { label: 'split', tone: 'wait' },
-  unreviewed: { label: 'unreviewed', tone: 'wait' },
-  timed_out: { label: 'timed out', tone: 'bad' },
+  unreviewed: { label: 'not reviewed', tone: 'wait' },
+  timed_out: { label: 'no delivery', tone: 'bad' },
   failed: { label: 'failed', tone: 'bad' },
-  output_invalid: { label: 'bad output', tone: 'bad' },
+  output_invalid: { label: 'bad result', tone: 'bad' },
   cancelled_client: { label: 'cancelled', tone: 'dim' },
   cancelled_provider: { label: 'cancelled', tone: 'dim' },
   declined: { label: 'declined', tone: 'dim' },
@@ -46,7 +47,8 @@ export const SEALED_STATES = new Set<string>([
 export function shortHash(hash: string | null | undefined, head = 4, tail = 4): string {
   if (!hash) return '';
   if (hash.length <= head + tail + 1) return hash;
-  return `${hash.slice(0, head)}…${hash.slice(-tail)}`;
+  // the word joiner keeps the two halves on one line
+  return `${hash.slice(0, head)}…\u2060${hash.slice(-tail)}`;
 }
 
 /** 'rc_7Hq2…8sT1' keeps the prefix readable */
@@ -104,7 +106,7 @@ export function bpsPercent(bps: number): string {
 
 /** '@scout' when a handle exists, else the display name */
 export function partyLabel(party: { handle: string | null; name: string } | null | undefined): string {
-  if (!party) return 'unclaimed';
+  if (!party) return 'not on ANS yet';
   return party.handle ? `@${party.handle}` : party.name;
 }
 

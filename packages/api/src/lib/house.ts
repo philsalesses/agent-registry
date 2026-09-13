@@ -183,13 +183,15 @@ export interface HouseOfferDef {
   run: (input: any) => Promise<unknown>;
 }
 
+const HOUSE_DESCRIPTION = 'Free services run by ANS itself. Not ranked. Each agent can use them 50 times a day.';
+
 const EXAMPLE_TEXT = 'Example Domain This domain is for use in documentation examples without needing permission. Avoid use in operations. Learn more';
 
 export const HOUSE_OFFERS: readonly HouseOfferDef[] = [
   {
     slug: 'fetch-page',
     title: 'Fetch a web page as text',
-    description: 'Fetches a public https page and returns its title and visible text (scripts and styles removed, whitespace collapsed, up to 20000 characters). Free house offer run by the registry.',
+    description: 'Fetches a public https web page and returns its title and readable text, without scripts or styles, up to 20,000 characters. Free, run by ANS.',
     tags: ['house', 'web', 'fetch', 'text'],
     timeoutMs: 15_000,
     inputSchema: {
@@ -224,7 +226,7 @@ export const HOUSE_OFFERS: readonly HouseOfferDef[] = [
   {
     slug: 'validate-json',
     title: 'Validate JSON against a JSON Schema',
-    description: 'Validates a JSON value against a draft 2020-12 JSON Schema (strict mode, local $ref only, 32 KB) and returns every error with its JSON pointer. Free house offer run by the registry.',
+    description: 'Checks a JSON value against a JSON Schema (draft 2020-12, local $ref only, up to 32 KB) and lists every error and where it is. Free, run by ANS.',
     tags: ['house', 'json', 'json-schema', 'validation'],
     timeoutMs: 5000,
     inputSchema: {
@@ -278,7 +280,7 @@ export const HOUSE_OFFERS: readonly HouseOfferDef[] = [
   {
     slug: 'hash-text',
     title: 'SHA-256 of a text',
-    description: 'Returns the lowercase hex SHA-256 of a UTF-8 text up to 1 MB. Use it to compute the outputHash you deliver on a receipt. Free house offer run by the registry.',
+    description: 'Returns the SHA-256 fingerprint (lowercase hex) of a UTF-8 text up to 1 MB. Agents use it to fingerprint the work they deliver. Free, run by ANS.',
     tags: ['house', 'hash', 'sha256', 'receipts'],
     timeoutMs: 5000,
     inputSchema: {
@@ -305,7 +307,7 @@ export const HOUSE_OFFERS: readonly HouseOfferDef[] = [
   {
     slug: 'verify-agent',
     title: 'Verify an agent is registered',
-    description: 'Looks up an agent by id or handle and returns whether it is registered, its trust score, confidence and rank, and its confirmed and negative receipt counts. Free house offer run by the registry.',
+    description: 'Looks up an agent by ID or handle and returns whether it is registered, its trust score, confidence and rank, and how many of its jobs went well or badly. Free, run by ANS.',
     tags: ['house', 'verify', 'trust', 'registry'],
     timeoutMs: 5000,
     inputSchema: {
@@ -478,15 +480,15 @@ export async function ensureHouseAgent(now: Date = new Date()): Promise<{ agent:
           type: 'service',
           isHouse: true,
           publicKey: keys.publicKey,
-          description: 'Free house offers run by the registry. Labeled, unranked, 50 calls per agent per day.',
+          description: HOUSE_DESCRIPTION,
           homepage: 'https://ans-registry.org',
           tags: ['house'],
           createdAt: now,
           updatedAt: now,
         })
         .returning();
-    } else if (agent.publicKey !== keys.publicKey) {
-      [agent] = await tx.update(agents).set({ publicKey: keys.publicKey, updatedAt: now }).where(eq(agents.id, agent.id)).returning();
+    } else if (agent.publicKey !== keys.publicKey || agent.description !== HOUSE_DESCRIPTION) {
+      [agent] = await tx.update(agents).set({ publicKey: keys.publicKey, description: HOUSE_DESCRIPTION, updatedAt: now }).where(eq(agents.id, agent.id)).returning();
     }
 
     const out: OfferRow[] = [];

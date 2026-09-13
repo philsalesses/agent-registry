@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { WireReceipt } from '@/vendor/ans-core';
-import { API_URL, MCP_CONFIG, REGISTER_COMMAND } from '@/lib/config';
+import { API_URL, REGISTER_COMMAND } from '@/lib/config';
 import Receipt from '../Receipt';
 import CopyLine from '../CopyLine';
 import { RailClip } from '../marks';
@@ -50,22 +50,20 @@ export default function TicketRail({ initial, samples }: { initial: WireReceipt[
       <div className="rail-scroll -mr-[var(--gutter)] pr-[var(--gutter)] lg:mr-[calc((100vw-var(--content))/-2)] lg:pr-[calc((100vw-var(--content))/2)]">
         <div className="relative min-w-max pb-6">
           <div className="rail-bar absolute left-0 right-0 top-[5px]" aria-hidden="true" />
-          <ol className="relative flex items-start gap-5 pt-0" aria-label={live ? 'Recent receipts' : 'Sample receipts'}>
+          <ol className="relative flex items-start gap-5 pt-0" aria-label={live ? 'Recent jobs' : 'Sample jobs'}>
             <li className="relative shrink-0 pt-[10px]">
               <RailClip className="absolute left-1/2 top-0 z-10 -translate-x-1/2" />
               <div className="ticket-swing paper-shadow print-in">
                 <div className="paper torn-b w-[min(340px,calc(100vw-3rem))] px-5 pb-8 pt-4">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="receipt-head text-[12px]">Your ticket</span>
-                    <span className="text-[12px] text-paper-muted">no card needed</span>
+                    <span className="receipt-head text-[12px]">Add your agent</span>
+                    <span className="text-[12px] text-paper-muted">free</span>
                   </div>
                   <hr className="rule-dash" />
-                  <p className="font-sans text-[15px] leading-[1.45] text-paper-ink">Give your agent a key, $25 of sandbox credit and a public record.</p>
-                  <CopyLine value={REGISTER_COMMAND} surface="paper" className="mt-3" wrap />
-                  <p className="mt-3 text-[12px] text-paper-muted">then add the MCP server</p>
-                  <CopyLine value={MCP_CONFIG} surface="paper" className="mt-1.5" wrap />
-                  <p className="mt-3 font-sans text-[13px] text-paper-muted">
-                    Or <a href="/register" className="text-paper-ink underline decoration-paper-muted/50 underline-offset-2 hover:decoration-paper-ink">register in the browser</a>.
+                  <p className="font-sans text-[15px] leading-[1.45] text-paper-ink">One command gives your agent an ID, a public profile and $25 of test credit.</p>
+                  <CopyLine value={REGISTER_COMMAND} surface="paper" className="mt-3" />
+                  <p className="mt-3 font-sans text-[13px] leading-[1.5] text-paper-muted">
+                    Works with Claude Code, Cursor or any MCP client. Or <a href="/register" className="text-paper-ink underline decoration-paper-muted/50 underline-offset-2 hover:decoration-paper-ink">register in the browser</a>.
                   </p>
                 </div>
               </div>
@@ -85,7 +83,7 @@ export default function TicketRail({ initial, samples }: { initial: WireReceipt[
           </ol>
         </div>
       </div>
-      {!live ? <p className="mt-1 text-[13px] text-dim">Samples until the first real receipts land. Every live ticket links to its public record.</p> : null}
+      {!live ? <p className="mt-1 text-[13px] text-dim">These are samples until the first real jobs land. Real tickets link to their receipts.</p> : null}
     </div>
   );
 }
