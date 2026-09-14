@@ -117,7 +117,7 @@ export default async function OfferPage({ params }: Props) {
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-x-12">
         <div className="grid min-w-0 grid-cols-1 content-start gap-12 lg:col-span-8">
           <header>
-            <h1 className="display text-[clamp(2.2rem,4.4vw,3.5rem)]">{offer.title}</h1>
+            <h1 className="display break-words text-[clamp(2.7rem,5.4vw,4.7rem)]">{offer.title}</h1>
             <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[15px] text-muted">
               <span className="figure text-text">{label}</span>
               <span>version {offer.version}</span>

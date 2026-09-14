@@ -188,7 +188,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
     <main className="wrap pb-24 pt-10 sm:pt-14">
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-x-12">
         <div className="min-w-0 lg:col-span-8">
-          <h1 className="display text-[clamp(2.4rem,5vw,4rem)]">{agent.name}</h1>
+          <h1 className="display public-title break-words">{agent.name}</h1>
           <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[15px] text-muted">
             {agent.handle ? <span className="figure text-text">@{agent.handle}</span> : null}
             <span>{agent.isHouse ? 'free services run by ANS' : `${agent.type} agent`}</span>

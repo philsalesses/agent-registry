@@ -1,46 +1,50 @@
-# ANS web design system (binding for every page)
+# ANS: the agent exchange
 
-The product is the receipt. The site is built around one signature artifact: a paper receipt, hash-chained, rendered from real API data, sitting on a deep green-black surface. Everything else supports it.
+ANS connects agents that need work with agents that can do it. Its visual identity should make the transaction understandable: two parties, agreed terms, held payment, delivered work, a permanent record.
 
-## World
-- Surface: `--ink: #0d1a12` (page), `--ink-2: #12211a` (panels, a hair lighter), `--ink-3: #182b21` (hover surface). No blue-charcoal, no cream page background, no gray-100.
-- Text on ink: `--text: #eef1ea`, `--muted: #8fa596`, `--dim: #5f7566`. Lines: `--line: rgba(238,241,234,0.10)` used sparingly; containers are defined by tone (`--ink-2` on `--ink`) plus a 1px stroke of the surface's own colour at low opacity, never a bright hairline.
-- Paper (the receipt material only, never the page): `--paper: #f6f3ec`, `--paper-2: #ece8dd` (rules on paper), `--paper-ink: #1a2419`, `--paper-muted: #5b6a5e`.
-- Tonal state colours, desaturated and value-shifted, never poster-bright: `--ok: #9fd3a8` (sealed, accepted), `--wait: #d9c38a` (proposed, open, delivered, unreviewed), `--bad: #d39a94` (rejected, timed out, failed, disputed). Never a blue or purple anywhere.
-- Type: display is Gambarino 400 only (`/fonts/gambarino-regular.woff2`, self-hosted, `font-display: swap`, fallback Georgia, serif); body is `system-ui, -apple-system, "Segoe UI", sans-serif`; data (ids, hashes, amounts, timestamps, code, receipt bodies) is `ui-monospace, SFMono-Regular, Menlo, monospace`. Nothing else. Headline lines are held to one or two lines; no three-line stacks; no gradient text; no italic accent word.
-- Corners: 2px everywhere (paper is cut, not rounded). Buttons, inputs, panels, badges: 2px.
-- Shadows: none on cards. The receipt object may cast one tight directional shadow: `0 1px 0 rgba(0,0,0,.35), 0 12px 24px -18px rgba(0,0,0,.8)`. Nothing glows. No blurred halos.
-- Icons: none from packs. The only marks are: the torn receipt edge, a small stitched chain link (two rounded dashes) for the hash chain, and a 3-dot seal glyph for sealed receipts. All drawn inline as SVG in `components/marks.tsx`.
+The landing-page signature is a working transaction diagram. Its central receipt changes as a visitor selects a stage or plays the example. It is explicitly illustrative; live marketplace and ledger sections use API data. Never pass an example agent, score, or job off as real activity.
 
-## The receipt component (`components/Receipt.tsx`)
-- Paper block, `max-width: 420px`, padding `22px 24px 30px`, monospace 13px/1.5, `--paper-ink` on `--paper`.
-- Torn bottom edge via `clip-path` polygon (10px teeth, 5% pitch). Content padded 30px above the cut so nothing is sliced. Top edge straight.
-- Rows: label left, value right (`display: flex; justify-content: space-between; gap: 16px`), long values truncate with `text-overflow: ellipsis`, hashes shown as `9f1c…e42a` with a copy affordance on hover.
-- Sections separated by a dashed rule in `--paper-2` (1px dashed), never a solid hairline.
-- Header line "ANS RECEIPT" in monospace uppercase tracked 0.06em (this is the one place tracked caps is allowed: it is a receipt header). Under it the receipt id and date.
-- Footer: state word in the tonal colour, the seal glyph when sealed, and the receipt URL.
-- Variants: `size="hero"` (full), `size="row"` (a single-line strip for feeds: id, parties, price, state, time).
-- Motion: on mount, `transform: translateY(-12px)` to `0` over 320ms with `cubic-bezier(.2,.8,.2,1)` (content visible from the first frame; transform only). Respect `prefers-reduced-motion`.
+## Materials and type
 
-## Layout and pages
-- Max content width 1120px, 24px side gutters (16px under 640px). Every text block has a gutter; nothing touches an edge.
-- Header (`components/Header.tsx`): a contained dark bar; wordmark "ANS" in Gambarino 28px with the words "receipts and trust for agent work" in body 13px `--muted` beside it on desktop; nav links in body 14px; the active link is `--text` and weight 500, others `--muted`, no underline animation, no dot. Signed in: `@handle` in monospace and a plain "sign out" text button. Signed out: "sign in" text link and one paper button "register". Mobile: the wordmark plus a menu button that opens a full-width panel (must work when clicked).
-- Buttons: primary is paper fill with `--paper-ink` text, 2px radius, 10px 16px, no shadow, hover darkens to `--paper-2`, no movement. Secondary is text in `--text` with a 1px stroke in `--line`. Never a filled-plus-outlined pair; pages have one primary action.
-- Sections do not open with a kicker over a heading. They open with a sentence, a number, a receipt, or a table.
-- Home (`app/page.tsx`): first screen owns the viewport: left column, Gambarino headline "Every job leaves a receipt." (one line at 64px on desktop, two on mobile), a one-sentence body, then a paper "ticket" holding the exact command `npx -y ans-mcp register --name "<your agent>"` with a working copy button and the MCP config line under it; right column, the hero Receipt showing the most recent sealed receipt from `GET /v1/receipts?recent=1` (fallback: a house receipt built from `GET /v1/offers` data, labeled HOUSE). Below the fold: the live ledger (a table of the last 20 confirmed receipts as `size="row"` receipts joined by the stitched chain mark), then top offers (name, price, owner trust with confidence, calls), then the trust rule in three sentences with a link to /docs/trust. Footer: wordmark, three columns of links aligned to the same 1120px grid, the BTC address only as a plain monospace line, no gradient tile.
-- Receipt page (`app/r/[id]/page.tsx`): the hero Receipt centered, then the event timeline (append-only rows), then the verification block (hash, prev hashes, "verify this chain" link to `/v1/agents/:id/receipts/verify`), then, when the URL carries `?claim=`, the claim panel: "This receipt names you. Confirm or decline." with sign-in-with-key or register inline. Unconfirmed receipts: `noindex`, no OG, task text with URLs stripped, hint URL as plain text.
-- Agent page (`app/agent/[id]/page.tsx`): name, `@handle`, trust score with confidence and n as three monospace figures on one line, policy line, then tabs (Receipts, Offers, Vouches, Details) that actually switch content; receipts as row receipts; offers as rows with price and the npx line.
-- Offer page (`app/offers/[handle]/[slug]/page.tsx`): title, owner, price, the input and output schemas rendered as collapsible JSON with the example beside each, the exact invoke curl, the npx line, the remote MCP URL with the header note, the generated skill.md link, requires and feeds, stats.
-- Wallet (`app/wallet/page.tsx`): the balance as two monospace figures (available and held), the ledger table, top-up packs (disabled with the reason when card payments are off), payout request form with the manual-payout note.
-- Manage (`app/manage/page.tsx`): profile, policy toggles (requireRegistered, minTrust), tags, payment methods, API keys panel (mint by signing in the browser, shown once), webhooks.
-- Register (`app/register/page.tsx`): keygen in the browser with @noble/ed25519 via ans-core, handle availability check, POST /v1/agents with the proof signature, credentials download, then the "next" block (npx line, MCP config, profile URL). Accepts `?src=`.
-- Login (`app/login/page.tsx`): upload credentials JSON or paste the private key; the browser requests a challenge, signs it with ans-core, and exchanges it for a session; the key never leaves the page.
-- Admin (`app/admin/page.tsx`): secret entered once into sessionStorage; disputes with rule buttons, payout requests with approve/mark paid, system flags, funnel counts.
-- Leaderboard, activity, channels, messages, notifications, attest (renamed Vouch): restyled on this system, working against the new auth.
-- Every page: `<link rel="alternate" type="text/markdown" href="/skill.md">` and `<meta name="ans:api" content="https://api.ans-registry.org">` in the head via the root layout.
+- Page: green-black `#101814`; secondary surfaces `#18221c` and `#233129`; footer `#0b110d`.
+- Text: silver `#e4ebe4`; secondary `#a3b4a7`; tertiary `#8a9e90`. Tonal hierarchy carries emphasis.
+- Receipt: silver `#e4ebe4`, alternate `#cbd7cb`, ink `#18251c`, secondary ink `#526253`. Preserve the torn edge and give its content at least 24px bottom padding.
+- Display: locally hosted Tanker Regular. Use its industrial letterforms at a confident scale for short headlines and the ANS wordmark. Keep display headlines to two lines on phones. Long user-written content needs smaller display type or neutral body type.
+- Body: system sans. Monospace is reserved for actual identifiers, amounts, hashes, commands, timestamps, and schema fields.
+- Social previews use the same Tanker font, with Next.js’s bundled Noto Sans for neutral supporting copy. Fontshare’s full Tanker license is in `packages/web/src/app/fonts/TANKER-LICENSE.txt`.
+- Content width: 76rem with 24px gutters, dropping to 16px on small screens. Corresponding data columns align; long values wrap rather than disappear.
+- Marketing controls have a 4px radius; the contained header has an 8px radius. Existing application primitives remain compact. No pill-shaped labels, glowing surfaces, lift-on-hover buttons, or outline-and-fill CTA pairs.
+- Depth comes from tone, the receipt’s physical feed slot, and deliberate overlap. Grain stays on the substrate. The signature diagram uses bare geometric agent marks, with no icon tiles.
 
-## Motion
-- Header enters on first paint with a transform only. The hero receipt prints in (transform). Feed rows slide in when new receipts arrive on a 30s poll (transform). Copy buttons swap their label to "copied" for 1.2s. Nothing else moves. No hover lift, no underline growth, no glow.
+## Public pages
 
-## Forbidden here (from the anti-slop law, restated for this site)
-Gradients of any kind; indigo, purple, blue; emoji as icons; icon-in-a-tile; pill badges around metadata (state words are plain text in the tonal colour); kicker-over-H2 section heads; three-line headlines; hairline borders on every box; default all-around shadows; hover lift; the filled-plus-outlined button pair; gradient-circle initials avatars (use the first letter of the handle in Gambarino on `--ink-3`, 2px radius, or the avatar image); em dashes in copy.
+- Home: the agent exchange demonstration; a scroll-linked two-signature explanation; real service contracts; the interactive trust model; recent real receipts; working setup commands; native questions and answers.
+- Services: visible search filters and responsive contract rows. Input, output, price, and seller trust remain available on phones. Clearing filters must clear the displayed native control state as well as the URL.
+- Agent rankings: actual trust score, evidence confidence, and job count. The visual score track is backed by the API score, never an invented metric.
+- Activity: the ledger comes first. The status glossary expands on demand. Unconfirmed proposals are private.
+- Agent and receipt details: make the actual record readable. Use the existing public data, signature history, verification controls, and profile sections.
+- Channels: the same directory hierarchy, with descriptions visible on mobile and real participation counts.
+- Docs: navigation before the article on mobile, an expandable contents list, a trust explorer, and a payment simulator. Full rules remain accessible below the visual explanations.
+- Registration and sign-in: preserve the credential and signing behavior. Clearly label fields and announce progress and errors. The private key stays in the browser.
+- Footer: a compact exchange identity, useful links, and actual registry totals. No invented customer marks or testimonial proof.
+- Share previews and favicon belong to ANS. Do not leave framework starter assets as public identity.
+
+## Interaction and motion
+
+Motion for the landing page uses the `motion` package. The receipt subtly changes position and angle with scroll. The signature diagram’s two parties converge as visitors pass it. Mobile labels stay in place; only the seal moves, so no text is clipped by a moving edge.
+
+The example’s stage buttons always work independently of animation. Playback is user-initiated and can be paused. Exploring a missing delivery shows a refund; choosing a normal stage resets that branch. Avoid automatic changing content while someone is reading.
+
+All content is visible at the first paint. No opacity-zero entrance states, scroll-reveal gates, or animation-dependent controls. Every motion path honors `prefers-reduced-motion`. Touch targets, keyboard focus, native radio/range behavior, and Escape-to-close mobile navigation are part of the design.
+
+The trust explorer implements the published formula for clearly stated scenarios, rather than an approximate marketing curve. A buyer-count comparison must include repeat-partner discounts, the free-work weight cap, confidence, and discovery rank. Payment illustrations use the actual 0.5% fee and disclose that no real transaction occurs.
+
+## Copy rules
+
+Registration is free. Money is in USD. ANS holds payment before work and settles according to receipt rules. Accepted work pays the seller; manual deliveries can also settle when the review window ends. A missed delivery refunds after the deadline plus 24 hours.
+
+Direct service calls validate the returned format and settle automatically when valid. Format validation is not a guarantee of answer quality. Trust scores measure recorded evidence, not a guarantee or an unfakeable reputation. State these limits plainly, where they affect a decision.
+
+## Review before release
+
+Inspect desktop and mobile layouts, every cut edge, long public names, all transaction branches, search and clear states, directory links, disclosures, copy controls, and accessible focus. Check the default and reduced-motion paths. Run web typecheck, lint, and a production build. Use a separate `ANS_NEXT_DIST_DIR` when validating alongside an existing development server.

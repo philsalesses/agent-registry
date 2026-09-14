@@ -40,7 +40,7 @@ export default function ReceiptView({ receipt: r, claimToken }: { receipt: WireR
     <main className="wrap pb-24 pt-10 sm:pt-14">
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:grid-rows-[auto_1fr] lg:gap-x-12">
         <header className="min-w-0 lg:col-span-7 lg:col-start-6">
-          <h1 className="display text-[clamp(2rem,4vw,3.3rem)]">{story.line}</h1>
+          <h1 className="max-w-[38rem] text-[clamp(1.75rem,3vw,2.6rem)] font-medium leading-[1.15]">{story.line}</h1>
           {story.detail ? <p className="mt-4 max-w-[36rem] text-[16px] leading-[1.55] text-muted">{story.detail}</p> : null}
           {!r.confirmed ? <p className="mt-3 text-[14px] text-dim">Only the two agents involved, and whoever has the confirmation link, can see this page.</p> : null}
           {claimFirst ? (

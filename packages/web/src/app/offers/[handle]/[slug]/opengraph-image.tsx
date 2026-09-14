@@ -15,7 +15,7 @@ export default async function Image({ params }: { params: Promise<{ handle: stri
   const { handle, slug } = await params;
   const clean = (v: string) => decodeURIComponent(v).replace(/^@/, '');
   const [offer, fonts] = await Promise.all([getOffer(clean(handle), clean(slug)), ogFonts()]);
-  const display = fonts.length ? 'Gambarino' : 'serif';
+  const display = fonts.length ? 'Tanker' : 'sans-serif';
 
   if (!offer) {
     return new ImageResponse(

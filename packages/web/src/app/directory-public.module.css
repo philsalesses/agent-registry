@@ -1,0 +1,219 @@
+.page {
+  padding-top: clamp(3rem, 6vw, 6rem);
+  padding-bottom: 3rem;
+}
+
+.opening {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: end;
+  gap: 2rem 5rem;
+  margin-bottom: 3rem;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: clamp(3.6rem, 7.8vw, 6.7rem);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.intro {
+  max-width: 32rem;
+  color: var(--color-muted);
+  font-size: 1rem;
+  line-height: 1.65;
+  padding-bottom: 0.3rem;
+}
+
+.intro strong { color: var(--color-text); font-weight: 500; }
+
+.search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 10rem 11rem auto;
+  align-items: end;
+  gap: 1.25rem;
+  padding: 1.6rem;
+  background: var(--color-ink-2);
+}
+
+.search label {
+  display: grid;
+  gap: 0.6rem;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  min-height: 2.7rem;
+  padding: 0.75rem 1.15rem;
+  border: 0;
+  border-radius: 2px;
+  background: var(--color-paper);
+  color: var(--color-paper-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+
+.action:hover { background: var(--color-paper-2); }
+.action svg { transition: transform 180ms ease; }
+.action:hover svg { transform: translate(1px, -1px); }
+
+.resultsMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 2.5rem 0 1rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.resultsMeta h2 { color: var(--color-text); font-size: 1rem; font-weight: 500; }
+
+.offerList { container-type: inline-size; }
+.offerHeader, .offerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.3fr) 5.5rem 7rem;
+  gap: 1.75rem;
+  align-items: center;
+}
+.offerHeader { padding: 0 1.5rem 0.8rem; color: var(--color-dim); font-size: 0.75rem; }
+.offerHeader span:nth-last-child(-n+2) { text-align: right; }
+.offerRow {
+  min-height: 7.5rem;
+  padding: 1.4rem 1.5rem;
+  margin-bottom: 0.35rem;
+  background: var(--color-ink-2);
+  transition: background 180ms ease;
+}
+.offerRow:hover { background: var(--color-ink-3); }
+.offerIdentity { min-width: 0; }
+.offerTitle { display: block; font-weight: 500; font-size: 1.05rem; line-height: 1.4; color: var(--color-text); }
+.offerName { display: block; margin-top: 0.3rem; color: var(--color-muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+.contract { display: grid; grid-template-columns: minmax(0, 1fr) 1rem minmax(0, 1fr); align-items: center; gap: 0.75rem; }
+.contractPart { display: grid; min-width: 0; gap: 0.4rem; }
+.contractLabel { font-size: 0.68rem; color: var(--color-dim); }
+.contractValue { color: var(--color-text); font-size: 0.8rem; overflow-wrap: anywhere; line-height: 1.45; }
+.flowArrow { color: var(--color-dim); }
+.offerPrice, .offerTrust { text-align: right; }
+.offerPrice { color: var(--color-text); font-size: 1.1rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.offerPrice small { display: block; font-size: 0.7rem; color: var(--color-dim); }
+.offerTrust { color: var(--color-muted); font-size: 0.8rem; line-height: 1.5; }
+.offerTrust strong { display: block; color: var(--color-text); font-size: 1rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.offerTrust small { display: block; font-size: 0.7rem; }
+.empty { padding: 2rem 1.5rem; background: var(--color-ink-2); }
+
+.publish {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 3rem 5rem;
+  margin-top: 6rem;
+  padding: 3rem 0 1rem;
+}
+.publish h2 { font-family: var(--font-display); text-transform: uppercase; font-weight: 400; font-size: clamp(2.6rem, 4.5vw, 4rem); line-height: 1.05; }
+.publish p { margin-top: 1rem; color: var(--color-muted); font-size: 0.95rem; line-height: 1.65; max-width: 30rem; }
+.publishCode { display: grid; align-content: center; gap: 0.8rem; min-width: 0; }
+.publishCode p { margin-top: 0; font-size: 0.85rem; }
+
+.rankingGuide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem;
+  margin: 0 0 3.5rem;
+  padding: 1.8rem 0;
+}
+.rankingGuide > div { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 1.1rem; }
+.rankingGuide dt { font-family: var(--font-display); color: var(--color-text); font-size: 3rem; line-height: 1; }
+.rankingGuide dd { color: var(--color-muted); font-size: 0.82rem; max-width: 10rem; line-height: 1.5; }
+.rankHeader, .rankRow { display: grid; grid-template-columns: 2.5rem minmax(0, 1.7fr) minmax(5rem, 0.7fr) minmax(5rem, 0.65fr) 5rem; gap: 1.5rem; align-items: center; }
+.rankHeader { padding: 0 1.5rem 0.9rem; font-size: 0.75rem; color: var(--color-dim); }
+.rankRow { padding: 1.5rem; background: var(--color-ink-2); margin-bottom: 0.35rem; min-height: 6.5rem; transition: background 180ms ease; }
+.rankRow:hover { background: var(--color-ink-3); }
+.rankNumber { font-family: var(--font-display); font-size: 2rem; color: var(--color-dim); line-height: 1; }
+.rankIdentity { min-width: 0; }
+.rankIdentity strong { display: block; font-size: 1rem; font-weight: 500; color: var(--color-text); overflow-wrap: anywhere; }
+.rankIdentity small { display: block; color: var(--color-muted); font-size: 0.8rem; margin-top: 0.3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rankScore { color: var(--color-text); font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.scoreTrack { display: block; height: 4px; margin-top: 0.45rem; background: var(--color-ink-3); border-radius: 2px; }
+.scoreTrack span { display: block; height: 100%; border-radius: inherit; background: var(--color-muted); }
+.rankValue { color: var(--color-text); font-size: 1rem; font-variant-numeric: tabular-nums; }
+.rankValue small, .rankScore small { display: none; }
+.rankingFoot { margin-top: 1.5rem; color: var(--color-muted); font-size: 0.85rem; max-width: 46rem; line-height: 1.65; }
+
+.ledgerTools { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 1.5rem; margin-bottom: 2rem; color: var(--color-muted); font-size: 0.85rem; }
+.glossary { max-width: 100%; }
+.glossary summary { color: var(--color-text); cursor: pointer; padding: 0.65rem 0; }
+.glossary summary::marker { color: var(--color-dim); }
+.glossary dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; padding: 1rem 0; max-width: 55rem; }
+.glossary dl > div { display: grid; gap: 0.2rem; }
+.glossary dt { color: var(--color-text); font-weight: 500; }
+.glossary dd { color: var(--color-muted); }
+.ledgerDay { display: grid; grid-template-columns: 7rem minmax(0, 1fr); align-items: start; gap: 2rem; margin-bottom: 2.5rem; }
+.ledgerDate { padding-top: 0.7rem; color: var(--color-muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.ledgerEntries { display: grid; gap: 0.8rem; min-width: 0; }
+.registration { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.7rem 1rem; color: var(--color-muted); font-size: 0.85rem; }
+.registration > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.registration > span:last-child { flex-shrink: 0; font-size: 0.75rem; }
+.pager { display: flex; flex-wrap: wrap; gap: 2rem; margin-top: 2rem; font-size: 0.95rem; }
+
+@container (max-width: 700px) {
+  .offerHeader { display: none; }
+  .offerRow { grid-template-columns: minmax(0, 1fr) auto; gap: 1.2rem; padding: 1.25rem; }
+  .offerIdentity { grid-column: 1; grid-row: 1; }
+  .offerPrice { grid-column: 2; grid-row: 1; }
+  .contract { grid-column: 1; grid-row: 2; max-width: 22rem; }
+  .offerTrust { grid-column: 2; grid-row: 2; align-self: end; }
+}
+
+@container (max-width: 430px) {
+  .contract { grid-column: 1 / -1; grid-row: 2; max-width: none; }
+  .offerTrust { grid-column: 1 / -1; grid-row: 3; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.5rem; max-width: none; text-align: left; }
+  .offerTrust strong { display: inline; font-size: 0.9rem; }
+  .offerTrust small { display: inline; }
+}
+
+@media (max-width: 800px) {
+  .opening { grid-template-columns: 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+  .title { font-size: clamp(3.6rem, 11vw, 5.5rem); }
+  .intro { max-width: 36rem; }
+  .search { grid-template-columns: 1fr 1fr; gap: 1rem; padding: 1.25rem; }
+  .search > label:first-child { grid-column: 1 / -1; }
+  .search .action { grid-column: 1 / -1; }
+  .publish { grid-template-columns: 1fr; gap: 2rem; margin-top: 4rem; padding-top: 1rem; }
+  .rankingGuide { gap: 1rem; margin-bottom: 2rem; }
+  .rankingGuide > div { grid-template-columns: 1fr; gap: 0.5rem; align-content: start; }
+  .rankHeader { display: none; }
+  .rankRow { grid-template-columns: 2rem minmax(0, 1fr) 5rem; gap: 1rem; padding: 1.25rem; }
+  .rankNumber { grid-row: 1 / span 2; align-self: start; padding-top: 0.2rem; }
+  .rankIdentity { grid-column: 2; }
+  .rankScore { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+  .rankValue { grid-column: 2; font-size: 0.8rem; color: var(--color-muted); }
+  .rankValue small { display: inline; margin-left: 0.4rem; font-size: inherit; }
+  .rankValue:last-child { display: none; }
+  .rankIdentity small { white-space: normal; }
+  .rankScore small { display: block; font-size: 0.68rem; color: var(--color-muted); }
+  .ledgerDay { grid-template-columns: 1fr; gap: 0.8rem; }
+  .ledgerDate { padding-top: 0; }
+}
+
+@media (max-width: 480px) {
+  .rankingGuide { gap: 0.8rem; }
+  .rankingGuide dt { font-size: 2.7rem; }
+  .rankingGuide dd { font-size: 0.76rem; }
+  .glossary dl { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action, .action svg, .offerRow, .rankRow { transition: none; }
+}

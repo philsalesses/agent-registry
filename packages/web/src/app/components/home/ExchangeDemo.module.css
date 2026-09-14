@@ -1,0 +1,61 @@
+.exchange { position: relative; width: 100%; margin: 0 auto; }
+.stageTop { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--color-muted); font-size: 12px; padding: 0 0 14px; }
+.stageTop > :first-child { color: var(--color-text); font-size: 14px; }
+.workspace { min-height: 390px; position: relative; display: grid; grid-template-columns: 1fr 350px 1fr; align-items: center; gap: 50px; isolation: isolate; padding: 18px 8% 35px; }
+.routes { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; fill: none; stroke: #3b5142; stroke-width: 1.5; stroke-linecap: round; }
+.routes .transit { stroke: #cbd7cb; stroke-width: 2; stroke-dasharray: 18 700; animation: travel 6s linear infinite; }
+@keyframes travel { from { stroke-dashoffset: 718; } to { stroke-dashoffset: 0; } }
+.party { align-self: center; white-space: pre-line; padding-block: 12px; background: transparent; width: fit-content; position: relative; }
+.seller { justify-self: end; }
+.agentGlyph { color: #b1c4b3; margin-bottom: 17px; }
+.partyName { font-weight: 550; font-size: 19px; }
+.handle { font: 12px var(--font-mono); color: var(--color-muted); margin-top: 5px; }
+.partyTask { font-size: 14px; line-height: 1.5; color: var(--color-muted); margin-top: 14px; }
+.flowLabel { display: block; font-size: 12px; color: #cad9cb; margin-top: 20px; }
+.receiptWrap { width: 310px; margin: 0 auto; position: relative; transform-origin: 50% 0; }
+.feedSlot { position: relative; margin: 0 -13px -7px; height: 37px; background: #35493c; border-radius: 7px 7px 3px 3px; padding: 0 16px; box-shadow: inset 0 1px #6d8572, 0 3px 4px #060d0840; display: flex; align-items: center; justify-content: space-between; }
+.feedSlot span { font: 18px var(--font-display); letter-spacing: .06em; color: #c1d1c2; }
+.feedSlot i { width: 14px; height: 3px; border-radius: 2px; background: #cbd7cb; }
+.receipt { padding: 26px 25px 30px; background: var(--color-paper); color: var(--color-paper-ink); position: relative; }
+.receiptHeader { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.receiptStatus { font: 52px/1.1 var(--font-display); letter-spacing: .025em; margin-top: 17px; animation: status 320ms ease-out; }
+@keyframes status { from { transform: translateY(-5px); } to { transform: translateY(0); } }
+.receiptJob { font-size: 13px; margin-top: 7px; }
+.receiptParties { display: flex; justify-content: space-between; gap: 8px; margin: 14px 0 21px; font: 11px var(--font-mono); }
+.receiptParties > :nth-child(2) { font: 12px var(--font-sans); color: var(--color-paper-muted); }
+.receiptData { display: grid; gap: 9px; }
+.receiptData div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.receiptData dt { color: var(--color-paper-muted); font-size: 11px; }
+.receiptData dd { font: 11px var(--font-mono); text-align: right; }
+.receiptData > :first-child dd { font-size: 24px; letter-spacing: -.025em; }
+.perforation { height: 2px; margin: 20px 0 15px; background-image: radial-gradient(circle, #6b7d6b 1px, transparent 1.5px); background-size: 7px 2px; }
+.recordEnd { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.receiptMicro { display: block; margin-top: 7px; font-size: 11px; color: var(--color-paper-muted); padding-left: 23px; }
+.controls { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; }
+.controls button { display: flex; align-items: center; gap: 12px; text-align: left; padding: 16px 19px; border-radius: 4px; background: #1a271f; color: var(--color-muted); font-size: 13px; transition: background 180ms, color 180ms; }
+.controls button:hover { background: #293a2e; color: var(--color-text); }
+.controls button[aria-pressed=true] { background: #d0dcd0; color: #18251c; }
+.stepNumber { font: 11px var(--font-mono); opacity: .7; }
+.stepMark { margin-left: auto; font-size: 18px; line-height: 1; }
+.explanation { padding-top: 23px; display: grid; grid-template-columns: 1fr 230px; gap: 35px; min-height: 128px; }
+.explanation h2 { font-size: 16px; font-weight: 550; margin-bottom: 7px; }
+.explanation p { color: var(--color-muted); font-size: 14px; line-height: 1.55; max-width: 650px; }
+.replay { display: flex; align-items: flex-end; flex-direction: column; gap: 12px; padding-top: 2px; }
+.replay button { font-size: 12px; display: flex; align-items: center; gap: 13px; color: var(--color-muted); min-height: 25px; }
+.replay button:first-child { color: var(--color-text); }
+.replay button:hover { color: #fff; }
+.replay button:disabled { display: none; }
+@media(min-width:1500px) { .workspace { min-height: 410px; } }
+@media(max-width:900px) { .workspace { grid-template-columns:1fr 300px 1fr; gap:20px; padding-inline:3%; } .receiptWrap { width:280px; } .partyName {font-size:17px;} .controls button {padding:14px 12px;gap:8px;font-size:12px;} }
+@media(max-width:640px) {
+ .stageTop {font-size:10px; align-items:flex-start;} .stageTop > :first-child {font-size:12px;max-width:130px;} .stageTop > :last-child {max-width:130px;text-align:right;}
+ .workspace {grid-template-columns:1fr 1fr;grid-template-rows:auto auto;padding:10px 0 28px;gap:14px;min-height:0;}
+ .party {grid-row:1;display:grid;grid-template-columns:30px 1fr;gap:0 9px;align-items:center;padding:5px 0;background:transparent;}
+ .seller {grid-column:2;} .agentGlyph {width:30px;height:30px;grid-row:span 2;margin:0;} .partyName {font-size:13px;} .handle {font-size:10px; margin:0;}
+ .partyTask, .flowLabel, .routes {display:none;}
+ .receiptWrap {grid-row:2;grid-column:span 2;width:min(300px, calc(100% - 40px));margin-top:14px;}
+ .receipt {padding:24px 24px 28px;} .receiptStatus {font-size:48px;}
+ .controls {grid-template-columns:1fr 1fr;} .controls button {padding:13px 12px;min-height:47px;}
+ .explanation {grid-template-columns:1fr;gap:14px;min-height:205px;} .explanation p {font-size:13px;} .replay {flex-direction:row;align-items:center;justify-content:space-between;gap:14px;} .replay button {font-size:11px;min-height:40px;}
+}
+@media(prefers-reduced-motion:reduce) { .routes .transit {animation:none;stroke-dasharray:none;opacity:.5;} .receiptStatus {animation:none;} }

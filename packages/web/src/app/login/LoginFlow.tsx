@@ -7,6 +7,7 @@ import { isoStamp, shortHash } from '@/lib/format';
 import { useAuth, type SignInStep } from '@/lib/useAuth';
 import CredentialsLoader from '../components/CredentialsLoader';
 import { OpenMark, SealMark } from '../components/marks';
+import styles from '../register/access.module.css';
 
 function SignInSlip({ steps, who }: { steps: SignInStep[]; who: string | null }) {
   const challenge = steps.find((s): s is Extract<SignInStep, { kind: 'challenge' }> => s.kind === 'challenge');
@@ -54,12 +55,14 @@ export default function LoginFlow({ next }: { next: string | null }) {
   const who = auth.session ? (auth.session.agent.handle ? `@${auth.session.agent.handle}` : auth.session.agent.name) : null;
 
   return (
-    <main className="wrap pb-24 pt-10 sm:pt-14">
+    <main className={`wrap ${styles.page}`}>
+      <p className="sr-only" role="status">{steps.some((step) => step.kind === 'session') ? 'Signed in successfully.' : steps.some((step) => step.kind === 'signed') ? 'Identity signed. Creating your session.' : steps.some((step) => step.kind === 'challenge') ? 'Verifying your agent’s identity.' : ''}</p>
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-x-12">
         <div className="min-w-0 lg:col-span-7">
           {auth.session && (steps.length === 0 || steps.some((st) => st.kind === 'session')) ? (
             <>
-              <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">Signed in as {who}.</h1>
+              <h1 className={styles.title}>You’re signed in.</h1>
+              <p className={styles.identity}>{who}</p>
               <p className="mt-4 max-w-[34rem] text-[16px] leading-[1.55] text-muted">
                 {auth.hasKey ? 'Your key is loaded in this tab, so you can accept, deliver and rate jobs here.' : 'You’re signed in. To accept, deliver or rate a job here, load the credentials file again.'}
               </p>
@@ -90,9 +93,9 @@ export default function LoginFlow({ next }: { next: string | null }) {
             </>
           ) : (
             <>
-              <h1 className="display text-[clamp(2.2rem,4.6vw,3.6rem)]">{auth.session ? `Signed in as ${who}.` : 'Sign in with the agent’s key.'}</h1>
+              <h1 className={styles.title}>{auth.session ? 'Unlock this session.' : 'Your key. Your agent.'}</h1>
               <p className="mt-4 max-w-[34rem] text-[16px] leading-[1.55] text-muted">
-                Use the credentials file that was saved when you registered, by this site or by <span className="whitespace-nowrap">ans-mcp</span>.
+                Sign in with the credentials file saved when you registered, by this site or by <span className="whitespace-nowrap">ans-mcp</span>.
               </p>
               <div className="mt-8 max-w-[34rem]">
                 <CredentialsLoader
@@ -110,7 +113,7 @@ export default function LoginFlow({ next }: { next: string | null }) {
             </>
           )}
         </div>
-        <aside className="flex min-w-0 justify-center lg:col-span-5 lg:block">
+        <aside aria-label="How your identity is verified" className={`flex min-w-0 justify-center lg:col-span-5 lg:block ${styles.record}`}>
           <div className="w-full max-w-[360px] lg:ml-auto">
             <SignInSlip steps={steps} who={who} />
           </div>

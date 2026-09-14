@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { WireOfferSummary } from '@/vendor/ans-core';
 import { confidenceLabel, priceLabel } from '@/lib/format';
+import styles from '../directory-public.module.css';
 
 /** '@handle/slug@3' -> ['handle', 'slug'] */
 export function offerPath(name: string): string {
@@ -14,49 +15,53 @@ export function offerLabel(name: string): string {
 }
 
 function OfferLine({ offer, showOwner }: { offer: WireOfferSummary; showOwner: boolean }) {
+  const rate = offer.stats.calls > 0 ? Math.round((offer.stats.ok / offer.stats.calls) * 100) : null;
   return (
     <li>
-      <Link
-        href={offerPath(offer.name)}
-        className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-1 rounded-sm px-4 py-4 transition-colors hover:bg-ink-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_7rem] md:items-baseline"
-      >
-        <span className="min-w-0">
-          <span className="figure block truncate text-[14px] text-text">{offerLabel(offer.name)}</span>
-          <span className="mt-0.5 block truncate text-[14px] text-muted">{offer.title}</span>
+      <Link href={offerPath(offer.name)} className={styles.offerRow}>
+        <span className={styles.offerIdentity}>
+          <span className={styles.offerTitle}>{offer.title}</span>
+          <span className={`${styles.offerName} figure`}>{offerLabel(offer.name)}</span>
         </span>
-        <span className="figure hidden truncate text-[13px] text-muted md:block" title={offer.inputFields.join(', ')}>
-          {offer.inputFields.slice(0, 3).join(', ') || 'nothing'}
+        <span className={styles.contract}>
+          <span className={styles.contractPart}>
+            <span className={styles.contractLabel}>You send</span>
+            <span className={`${styles.contractValue} figure`}>{offer.inputFields.join(', ') || 'No input'}</span>
+          </span>
+          <svg className={styles.flowArrow} width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 8h11m-4-4 4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className={styles.contractPart}>
+            <span className={styles.contractLabel}>You get</span>
+            <span className={`${styles.contractValue} figure`}>{offer.outputFields.join(', ') || 'No output'}</span>
+          </span>
         </span>
-        <span className="figure hidden truncate text-[13px] text-muted md:block" title={offer.outputFields.join(', ')}>
-          {offer.outputFields.slice(0, 3).join(', ') || 'nothing'}
+        <span className={styles.offerPrice}>
+          {priceLabel(offer.priceMicros)}
+          <small>{offer.priceMicros === '0' ? 'to use' : 'per call'}</small>
         </span>
-        <span className="figure text-right text-[14px] text-text">{priceLabel(offer.priceMicros)}</span>
-        <span className="figure hidden text-right text-[13px] text-muted md:block">
-          {showOwner
-            ? offer.owner.isHouse
-              ? 'run by ANS'
-              : `${offer.owner.trust.score} · ${confidenceLabel(offer.owner.trust.confidence)}`
-            : offer.stats.calls > 0
-              ? `${Math.round((offer.stats.ok / Math.max(offer.stats.calls, 1)) * 100)}% worked`
-              : 'not used yet'}
+        <span className={styles.offerTrust}>
+          {showOwner ? (
+            offer.owner.isHouse ? <>Run by ANS<small>Free utility</small></> : <><strong>{offer.owner.trust.score}<span className="sr-only"> out of 100</span></strong><small>seller trust</small><small>{confidenceLabel(offer.owner.trust.confidence)} confidence</small></>
+          ) : rate === null ? <>No calls yet</> : <><strong>{rate}%</strong><small>successful calls</small></>}
         </span>
       </Link>
     </li>
   );
 }
 
-/** A table of services: name and title, what you send, what you get back, price, and the seller's trust or call health. */
+/** Every breakpoint shows the contract, price and trust, so discovery stays useful on mobile. */
 export default function OfferRows({ offers, showOwner = true, empty }: { offers: WireOfferSummary[]; showOwner?: boolean; empty?: React.ReactNode }) {
   return (
-    <div className="panel overflow-hidden">
-      <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_7rem] gap-x-6 px-4 pb-2 pt-4 text-[12px] text-dim md:grid">
-        <span>service</span>
-        <span>you send</span>
-        <span>you get back</span>
-        <span className="text-right">price</span>
-        <span className="text-right">{showOwner ? 'seller’s trust' : 'success rate'}</span>
-      </div>
-      {offers.length > 0 ? <ul className="grid pb-1">{offers.map((o) => <OfferLine key={o.id} offer={o} showOwner={showOwner} />)}</ul> : <div className="px-4 py-10">{empty}</div>}
+    <div className={styles.offerList}>
+      {offers.length > 0 ? (
+        <>
+          <div className={styles.offerHeader} aria-hidden="true">
+            <span>Service</span><span>The contract</span><span>Price</span><span>{showOwner ? 'Track record' : 'Reliability'}</span>
+          </div>
+          <ul>{offers.map((offer) => <OfferLine key={offer.id} offer={offer} showOwner={showOwner} />)}</ul>
+        </>
+      ) : <div className={styles.empty}>{empty}</div>}
     </div>
   );
 }

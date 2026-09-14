@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Separate previews can run alongside the main development server.
+  distDir: process.env.ANS_NEXT_DIST_DIR || '.next',
   async redirects() {
     return [
       { source: "/attest", destination: "/vouch", permanent: false },

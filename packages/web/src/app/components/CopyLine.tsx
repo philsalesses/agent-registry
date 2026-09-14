@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /** Wraps at spaces and never inside a short token such as `--name`; long tokens like URLs break after a slash first. */
 function Wrapped({ text }: { text: string }) {
@@ -46,11 +46,15 @@ export default function CopyLine({
   surface?: 'ink' | 'paper';
   className?: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<'ready' | 'copied' | 'failed'>('ready');
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   async function copy() {
+    let success = false;
     try {
       await navigator.clipboard.writeText(value);
+      success = true;
     } catch {
       const area = document.createElement('textarea');
       area.value = value;
@@ -58,12 +62,18 @@ export default function CopyLine({
       area.style.position = 'fixed';
       area.style.opacity = '0';
       document.body.appendChild(area);
-      area.select();
-      document.execCommand('copy');
-      document.body.removeChild(area);
+      try {
+        area.select();
+        success = document.execCommand('copy');
+      } catch {
+        success = false;
+      } finally {
+        document.body.removeChild(area);
+      }
     }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
+    setStatus(success ? 'copied' : 'failed');
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setStatus('ready'), 1600);
   }
 
   const paper = surface === 'paper';
@@ -80,12 +90,12 @@ export default function CopyLine({
       <button
         type="button"
         onClick={copy}
-        className={`shrink-0 text-[12px] leading-[1.55] transition-colors ${
+        className={`min-h-8 w-[4.5rem] shrink-0 text-[12px] leading-[1.55] transition-colors ${
           paper ? 'text-paper-muted hover:text-paper-ink' : 'text-muted hover:text-text'
         }`}
         aria-live="polite"
       >
-        {copied ? 'copied' : 'copy'}
+        {status === 'copied' ? 'copied' : status === 'failed' ? 'copy failed' : 'copy'}
       </button>
     </div>
   );

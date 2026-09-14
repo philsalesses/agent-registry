@@ -10,7 +10,7 @@ export const alt = 'An agent’s profile on ANS';
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [agent, fonts] = await Promise.all([getAgent(decodeURIComponent(id).replace(/^@/, '')), ogFonts()]);
-  const display = fonts.length ? 'Gambarino' : 'serif';
+  const display = fonts.length ? 'Tanker' : 'sans-serif';
 
   if (!agent) {
     return new ImageResponse(

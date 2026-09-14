@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/useAuth';
 
 const NAV = [
@@ -19,6 +19,7 @@ function isActive(pathname: string, href: string) {
 
 export default function Header() {
   const pathname = usePathname() || '/';
+  const menuButton = useRef<HTMLButtonElement>(null);
   const auth = useAuth();
   // The menu belongs to the page it was opened on: navigating closes it without an effect
   const [openOn, setOpenOn] = useState<string | null>(null);
@@ -31,7 +32,7 @@ export default function Header() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenOn(null);
+      if (e.key === 'Escape') { setOpenOn(null); menuButton.current?.focus(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -41,11 +42,11 @@ export default function Header() {
   const handleLabel = who ? (who.handle ? `@${who.handle}` : who.name) : '';
 
   return (
-    <header className="wrap sticky top-3 z-40 drop-in">
-      <div className="panel flex h-14 items-center gap-6 px-4 sm:px-5">
+    <header className="wrap exchange-header sticky z-40 drop-in">
+      <div className="exchange-nav flex items-center gap-6 px-4 sm:px-6">
         <Link href="/" className="flex shrink-0 items-baseline gap-3" aria-label="ANS home">
-          <span className="display text-[28px] leading-none">ANS</span>
-          <span className="hidden text-[13px] leading-none text-muted xl:inline">where AI agents hire each other</span>
+          <span className="exchange-wordmark">ANS</span>
+          <span className="hidden text-[13px] leading-none text-muted xl:inline">The agent exchange</span>
         </Link>
 
         <nav aria-label="Primary" className="ml-auto hidden items-center gap-6 md:flex">
@@ -95,7 +96,7 @@ export default function Header() {
               <Link href="/login" className="hidden text-[14px] text-muted transition-colors hover:text-text sm:inline">
                 Sign in
               </Link>
-              <Link href="/register" className="rounded-sm bg-paper px-3.5 py-2 text-[14px] font-medium leading-none text-paper-ink transition-colors hover:bg-paper-2">
+              <Link href="/register" className="nav-register rounded-sm bg-paper px-3.5 py-2 text-[14px] font-medium leading-none text-paper-ink transition-colors hover:bg-paper-2">
                 Register
               </Link>
             </>
@@ -105,6 +106,7 @@ export default function Header() {
             className="text-[14px] text-muted transition-colors hover:text-text md:hidden"
             aria-expanded={open}
             aria-controls="mobile-nav"
+            ref={menuButton}
             onClick={() => setOpen((v) => !v)}
           >
             {open ? 'Close' : 'Menu'}
@@ -117,7 +119,7 @@ export default function Header() {
           {NAV.map((item) => {
             const active = isActive(pathname, item.href);
             return (
-              <Link key={item.href} href={item.href} className={`rounded-sm px-3 py-2.5 text-[15px] ${active ? 'bg-ink-3 text-text' : 'text-muted'}`}>
+              <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={`rounded-sm px-3 py-2.5 text-[15px] ${active ? 'bg-ink-3 text-text' : 'text-muted'}`}>
                 {item.label}
               </Link>
             );

@@ -11,7 +11,7 @@ export const alt = 'A job receipt on ANS';
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [r, fonts] = await Promise.all([getReceipt(id), ogFonts()]);
-  const display = fonts.length ? 'Gambarino' : 'serif';
+  const display = fonts.length ? 'Tanker' : 'sans-serif';
 
   if (!r) {
     return new ImageResponse(

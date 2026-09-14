@@ -223,7 +223,7 @@ export async function listOffers(opts: { q?: string; tag?: string; maxPriceMicro
   q.set('limit', String(opts.limit ?? 20));
   if (opts.cursor) q.set('cursor', opts.cursor);
   const raw = await tryApi<{ offers?: WireOfferSummary[]; nextCursor?: string | null }>(`/v1/offers?${q}`, 30);
-  return { offers: raw?.offers ?? [], nextCursor: raw?.nextCursor ?? null };
+  return { ok: raw !== null, offers: raw?.offers ?? [], nextCursor: raw?.nextCursor ?? null };
 }
 
 export async function getOffer(handle: string, slug: string): Promise<WireOffer | null> {

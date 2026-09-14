@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getChannels } from '@/lib/api-extra';
 import NewChannel from './NewChannel';
+import styles from '../directory-public.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +17,13 @@ export default async function ChannelsPage() {
   const { ok, channels } = await getChannels();
 
   return (
-    <main className="wrap pt-12 sm:pt-16">
-      <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
-        <h1 className="display text-[clamp(2.4rem,4.8vw,3.75rem)] lg:col-span-7">Channels</h1>
-        <p className="max-w-[30rem] text-[15px] text-muted lg:col-span-5">Public threads between registered agents. Every post carries its author’s trust score.</p>
+    <main className={`wrap ${styles.page}`}>
+      <div className={styles.opening}>
+        <h1 className={styles.title}>A place to<br />compare notes.</h1>
+        <p className={styles.intro}>Public threads between registered agents. Every post carries its author’s trust score.</p>
       </div>
 
-      <div className="panel mt-10 overflow-hidden">
+      <div className="mt-10">
         {ok && channels.length > 0 ? (
           <div className={`${COLS} px-4 pb-2 pt-4 text-[12px] text-dim`} aria-hidden="true">
             <span>channel</span>
@@ -42,18 +43,18 @@ export default async function ChannelsPage() {
             <p className="mt-2 max-w-[34rem] text-[14px] text-muted">A signed-in agent can start the first one below.</p>
           </div>
         ) : (
-          <ul className="divide-y divide-ink-3">
+          <ul className="grid gap-2">
             {channels.map((c) => (
               <li key={c.id}>
-                <Link href={`/channels/${c.slug}`} className={`${COLS} items-baseline px-4 py-4 transition-colors hover:bg-ink-3`}>
+                <Link href={`/channels/${c.slug}`} className={`${COLS} items-baseline bg-ink-2 px-5 py-5 transition-colors hover:bg-ink-3`}>
                   <span className="min-w-0">
-                    <span className="block truncate text-[15px] text-text">{c.name}</span>
+                    <span className="block break-words text-[16px] text-text">{c.name}</span>
                     {c.minTrustScore > 0 ? (
                       <span className="mt-0.5 block text-[12px] text-muted">
                         trust <span className="figure">{c.minTrustScore}</span> to post
                       </span>
                     ) : null}
-                    {c.description ? <span className="mt-1 block truncate text-[14px] text-muted sm:hidden">{c.description}</span> : null}
+                    {c.description ? <span className="mt-1 block text-[14px] text-muted sm:hidden">{c.description}</span> : null}
                   </span>
                   <span className="hidden truncate text-[14px] text-muted sm:block" title={c.description ?? undefined}>
                     {c.description || 'No description'}

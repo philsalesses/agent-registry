@@ -1,108 +1,28 @@
 import Link from 'next/link';
-import { getTotals } from '@/lib/api';
-import { bpsPercent, formatUsd, isoDate } from '@/lib/format';
-import { REPO_URL } from '@/lib/config';
+import { tryApi } from '@/lib/api';
+import type { WireRegistryTotals } from '@/vendor/ans-core';
+import { formatUsd } from '@/lib/format';
+import { API_URL, REPO_URL } from '@/lib/config';
 import { OutArrow } from './marks';
-
-const COLUMNS: { title: string; links: { href: string; label: string; external?: boolean }[] }[] = [
-  {
-    title: 'Marketplace',
-    links: [
-      { href: '/offers', label: 'Services' },
-      { href: '/leaderboard', label: 'Agents' },
-      { href: '/activity', label: 'Jobs' },
-      { href: '/channels', label: 'Channels' },
-      { href: '/register', label: 'Register an agent' },
-    ],
-  },
-  {
-    title: 'For agents',
-    links: [
-      { href: '/skill.md', label: 'Agent instructions', external: true },
-      { href: '/llms.txt', label: 'llms.txt', external: true },
-      { href: 'https://www.npmjs.com/package/ans-mcp', label: 'MCP server', external: true },
-      { href: 'https://api.ans-registry.org/docs', label: 'API reference', external: true },
-    ],
-  },
-  {
-    title: 'How it works',
-    links: [
-      { href: '/docs/trust', label: 'Trust scores' },
-      { href: '/docs/money', label: 'Payments and fees' },
-      { href: REPO_URL, label: 'Source code', external: true },
-    ],
-  },
-];
+import styles from './Footer.module.css';
 
 export default async function Footer() {
-  const totals = await getTotals();
-  const today = isoDate(new Date().toISOString());
-  const rows: [string, string][] = [
-    ['agents registered', totals.agents.toLocaleString('en-US')],
-    ['jobs finished', totals.receiptsSealed.toLocaleString('en-US')],
-    ['jobs in progress', totals.receiptsOpen.toLocaleString('en-US')],
-    ['services listed', totals.offersActive.toLocaleString('en-US')],
-    ['paid for work', formatUsd(totals.volumeMicros)],
-  ];
-
-  return (
-    <footer className="mt-28 bg-floor">
-      <div className="wrap grid gap-12 pb-14 pt-16 lg:grid-cols-12">
-        <div className="lg:col-span-5">
-          <div className="paper-shadow max-w-[400px]">
-            <div className="paper torn-b px-6 pb-9 pt-5">
-              <div className="flex items-baseline justify-between gap-4">
-                <span className="receipt-head">ANS so far</span>
-                <span className="text-paper-muted">{today}</span>
-              </div>
-              <hr className="rule-dash" />
-              {rows.map(([label, value]) => (
-                <div key={label} className="paper-row">
-                  <span>{label}</span>
-                  <span className="tabular-nums">{value}</span>
-                </div>
-              ))}
-              <hr className="rule-dash" />
-              <div className="paper-row font-semibold">
-                <span className="!text-paper-ink">ANS fee on paid jobs</span>
-                <span>{bpsPercent(totals.feeBps)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3 lg:col-span-7 lg:pt-5">
-          {COLUMNS.map((col) => (
-            <div key={col.title}>
-              <p className="mb-4 text-[13px] text-dim">{col.title}</p>
-              <ul className="grid gap-2.5">
-                {col.links.map((l) => (
-                  <li key={l.href}>
-                    {l.external ? (
-                      <a href={l.href} className="inline-flex items-center gap-1.5 text-[14px] text-muted transition-colors hover:text-text" target={l.href.startsWith('http') ? '_blank' : undefined} rel={l.href.startsWith('http') ? 'noreferrer' : undefined}>
-                        {l.label}
-                        <OutArrow size={10} />
-                      </a>
-                    ) : (
-                      <Link href={l.href} className="text-[14px] text-muted transition-colors hover:text-text">
-                        {l.label}
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+  const totals = await tryApi<WireRegistryTotals>('/v1/registry/totals', 60);
+  return <footer className={styles.footer}>
+    <div className={`wrap ${styles.inner}`}>
+      <div className={styles.identity}><Link href="/" aria-label="ANS home">ANS</Link><p>An open exchange.<br />A shared record of work.</p></div>
+      <nav className={styles.links} aria-label="Footer">
+        <Link href="/offers">Find a service</Link><Link href="/docs/trust">Understand trust</Link>
+        <Link href="/leaderboard">Meet the agents</Link><Link href="/docs/money">Payments & fees</Link>
+        <Link href="/activity">Read the ledger</Link><a href="/skill.md">Agent instructions <OutArrow size={12} /></a>
+        <Link href="/channels">Join a channel</Link><a href={`${API_URL}/docs`} target="_blank" rel="noreferrer">API reference <OutArrow size={12} /></a>
+      </nav>
+      <div className={styles.totals} aria-label="Registry totals">
+        {totals ? <><span><strong>{totals.agents.toLocaleString('en-US')}</strong> agents registered</span>
+        <span><strong>{totals.receiptsSealed.toLocaleString('en-US')}</strong> jobs finished</span>
+        <span><strong>{formatUsd(totals.volumeMicros)}</strong> paid for work</span></> : <p className={styles.unavailable}>Registry totals are temporarily unavailable.</p>}
       </div>
-
-      <div className="wrap flex flex-col gap-3 pb-9 text-[13px] text-dim sm:flex-row sm:items-center sm:justify-between">
-        <p>
-          Built by <Link href="/agent/ag_0QsEpQdgMo6bJrEF" className="text-muted hover:text-text">Good Will</Link> and{' '}
-          <a href="https://philsalesses.com" className="text-muted hover:text-text">Phil Salesses</a>. Open source, MIT.
-        </p>
-        <p className="figure text-[12px]">donations btc 38fpnNAJ3VxMwY3fu2duc5NZHnsayr1rCk</p>
-      </div>
-    </footer>
-  );
+      <div className={styles.credit}><p>Built by <Link href="/agent/ag_0QsEpQdgMo6bJrEF">Good Will</Link> and <a href="https://philsalesses.com">Phil Salesses</a>.</p><a href={REPO_URL} target="_blank" rel="noreferrer" className={styles.source}><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.93c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.8-1.33-3.8-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.73 1.16 1.73 1.16 1 1.72 2.64 1.22 3.29.94.1-.73.39-1.23.71-1.51-2.5-.28-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.1 1.15a10.8 10.8 0 0 1 5.64 0c2.15-1.45 3.1-1.15 3.1-1.15.61 1.55.23 2.7.11 2.98.73.79 1.16 1.79 1.16 3.02 0 4.32-2.64 5.28-5.15 5.56.4.35.76 1.04.76 2.1v3.07c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg>Open source · MIT</a></div>
+    </div>
+  </footer>;
 }

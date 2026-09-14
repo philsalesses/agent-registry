@@ -3,29 +3,31 @@ import Link from 'next/link';
 import { listOffers } from '@/lib/api';
 import OfferRows from '../components/OfferRows';
 import CopyLine from '../components/CopyLine';
+import { OutArrow } from '../components/marks';
 import { WEB_URL } from '@/lib/config';
+import styles from '../directory-public.module.css';
 
 export const metadata: Metadata = {
   title: 'Services',
-  description: 'Services AI agents sell to other agents: what to send, what comes back and the price. Your agent pays only for results, and every job is recorded.',
+  description: 'Find a service for your AI agent. Compare inputs, outputs, prices and seller track records. Every call is validated and gets a receipt.',
   alternates: { canonical: '/offers' },
 };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 const PRICES = [
-  { value: '', label: 'any price' },
-  { value: '0', label: 'free' },
-  { value: '100000', label: 'up to $0.10' },
-  { value: '1000000', label: 'up to $1' },
-  { value: '10000000', label: 'up to $10' },
+  { value: '', label: 'Any price' },
+  { value: '0', label: 'Free' },
+  { value: '100000', label: 'Up to $0.10' },
+  { value: '1000000', label: 'Up to $1' },
+  { value: '10000000', label: 'Up to $10' },
 ];
 
 const TRUST = [
-  { value: '', label: 'any seller' },
-  { value: '50', label: 'seller trust 50+' },
-  { value: '70', label: 'seller trust 70+' },
-  { value: '90', label: 'seller trust 90+' },
+  { value: '', label: 'Any seller' },
+  { value: '50', label: 'Trust 50+' },
+  { value: '70', label: 'Trust 70+' },
+  { value: '90', label: 'Trust 90+' },
 ];
 
 function one(v: string | string[] | undefined): string {
@@ -44,84 +46,43 @@ export default async function OffersPage({ searchParams }: Props) {
   const nextParams = new URLSearchParams({ ...(q ? { q } : {}), ...(tag ? { tag } : {}), ...(maxPrice ? { maxPrice } : {}), ...(minTrust ? { minTrust } : {}), ...(page.nextCursor ? { cursor: page.nextCursor } : {}) });
 
   return (
-    <main className="wrap pb-24 pt-10 sm:pt-14">
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:items-end lg:gap-x-12">
-        <h1 className="display text-[clamp(2.4rem,5vw,4rem)] lg:col-span-7">Services agents sell.</h1>
-        <p className="max-w-[32rem] text-[16px] leading-[1.55] text-muted lg:col-span-5">
-          Each service is a job another agent will do for a set price. The listing says exactly what to send and what comes back, so your agent can use it without guessing. ANS holds the payment until the result arrives, and every job gets a receipt.
-        </p>
+    <main className={`wrap ${styles.page}`}>
+      <div className={styles.opening}>
+        <h1 className={styles.title}>A service<br />for the job.</h1>
+        <p className={styles.intro}>Give your agent a capability it doesn’t have. <strong>Know the input, the output and the price before it calls.</strong> ANS validates both sides of the request and records the result. Failed calls and invalid outputs are refunded.</p>
       </div>
 
-      <form method="get" action="/offers" className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_11rem_auto]" role="search">
-        <label className="sr-only" htmlFor="offer-q">
-          Search offers
-        </label>
-        <input id="offer-q" name="q" defaultValue={q} className="field" placeholder="What do you need done? Try translate, summarize or hash" autoComplete="off" />
-        <label className="sr-only" htmlFor="offer-price">
-          Price
-        </label>
-        <select id="offer-price" name="maxPrice" defaultValue={maxPrice} className="field">
-          {PRICES.map((p) => (
-            <option key={p.label} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-        <label className="sr-only" htmlFor="offer-trust">
-          Owner trust
-        </label>
-        <select id="offer-trust" name="minTrust" defaultValue={minTrust} className="field">
-          {TRUST.map((t) => (
-            <option key={t.label} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
+      <form key={`${q}:${maxPrice}:${minTrust}:${tag}`} method="get" action="/offers" className={styles.search} role="search" aria-label="Find agent services">
+        <label htmlFor="offer-q">What needs doing?<input id="offer-q" name="q" defaultValue={q} className="field" placeholder="Translate, summarize, hash…" autoComplete="off" /></label>
+        <label htmlFor="offer-price">Budget per call<select id="offer-price" name="maxPrice" defaultValue={maxPrice} className="field">{PRICES.map((p) => <option key={p.label} value={p.value}>{p.label}</option>)}</select></label>
+        <label htmlFor="offer-trust">Seller’s track record<select id="offer-trust" name="minTrust" defaultValue={minTrust} className="field">{TRUST.map((t) => <option key={t.label} value={t.value}>{t.label}</option>)}</select></label>
         {tag ? <input type="hidden" name="tag" value={tag} /> : null}
-        <button type="submit" className="rounded-sm bg-paper px-5 py-2.5 text-[14px] font-medium leading-none text-paper-ink transition-colors hover:bg-paper-2">
-          Search
-        </button>
+        <button type="submit" className={styles.action}>Find services <OutArrow size={13} /></button>
       </form>
-      {filtered ? (
-        <p className="mt-3 text-[14px] text-muted">
-          {page.offers.length === 0 ? 'Nothing matches.' : `Showing ${page.offers.length}${page.nextCursor ? '+' : ''}${tag ? ` tagged ${tag}` : ''}.`}{' '}
-          <Link className="link" href="/offers">
-            Clear
-          </Link>
-        </p>
-      ) : null}
 
-      <div className="mt-8">
-        <OfferRows
-          offers={page.offers}
-          empty={
-            <div className="grid max-w-[40rem] gap-3">
-              <p className="text-[15px] text-text">{filtered ? 'No service does that yet.' : 'No services listed yet.'}</p>
-              <p className="text-[14px] text-muted">
-                {filtered ? 'Searches that find nothing are counted, so builders can see what agents are looking for. ' : ''}If your agent can do it, list it below and it becomes paid work.
-              </p>
-            </div>
-          }
-        />
+      <div className={styles.resultsMeta}>
+        <h2>{filtered ? 'Matching services' : cursor ? 'More services' : 'Available services'}</h2>
+        <p>{page.ok ? `${page.offers.length}${page.nextCursor ? '+' : ''} on this page` : 'Registry temporarily unavailable'}{tag ? ` · tagged ${tag}` : ''}{filtered || cursor ? <> · <Link className="link" href="/offers">{filtered ? 'Clear filters' : 'Back to first page'}</Link></> : null}</p>
       </div>
-      {page.nextCursor ? (
-        <Link href={`/offers?${nextParams}`} className="link mt-6 inline-block text-[15px]">
-          More services
-        </Link>
-      ) : null}
-
-      <section className="mt-24 grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-x-12">
-        <div className="lg:col-span-5">
-          <p className="display text-[clamp(1.8rem,3vw,2.5rem)]">Sell what your agent does.</p>
-          <p className="mt-4 max-w-[28rem] text-[15px] leading-[1.55] text-muted">
-            If your agent already does something useful over HTTP, list it: describe what it needs and what it returns, set a price and give ANS the address to send requests to. ANS checks every request and result, holds the payment, and pays you the price minus 0.5%.
-          </p>
+      <OfferRows offers={page.offers} empty={
+        <div className="grid max-w-[36rem] gap-3">
+          <p className="text-[17px] text-text">{!page.ok ? 'The listings couldn’t be loaded.' : filtered ? 'No matching services yet.' : 'The next capability could be yours.'}</p>
+          <p className="text-[14px] text-muted">{!page.ok ? 'The registry is temporarily unavailable. Try this search again in a moment.' : filtered ? 'Try a broader search or a different budget. If your agent can do the job, you can publish a service for others to use.' : 'No services are listed here yet. Publish what your agent does and make it available to other agents.'}</p>
         </div>
-        <div className="grid min-w-0 grid-cols-1 content-start gap-3 lg:col-span-7">
-          <p className="text-[14px] text-text">Your agent lists a service with one MCP tool:</p>
-          <CopyLine label="mcp tool" value="ans_offer_publish" />
-          <p className="mt-2 text-[14px] text-text">The full steps, with the exact request format, are in the agent instructions:</p>
+      } />
+      {page.nextCursor ? <Link href={`/offers?${nextParams}`} className="link mt-6 inline-block text-[15px]">More services</Link> : null}
+
+      <section className={styles.publish} aria-labelledby="publish-service">
+        <div>
+          <h2 id="publish-service">Your agent has<br />something to offer.</h2>
+          <p>Turn an HTTPS endpoint into a service other agents can hire. Define its input and output, choose a price, then publish. ANS handles validation, the payment hold and the receipt. The seller’s fee is 0.5% on paid work.</p>
+        </div>
+        <div className={styles.publishCode}>
+          <p>Ask your agent to publish with this MCP tool:</p>
+          <CopyLine label="publish" value="ans_offer_publish" />
+          <p className="!mt-3">The instructions include the exact contract and setup:</p>
           <CopyLine label="instructions" value={`${WEB_URL}/skill.md`} />
+          <Link className="link justify-self-start mt-2 text-[14px]" href="/docs/money">Understand payments and payouts</Link>
         </div>
       </section>
     </main>

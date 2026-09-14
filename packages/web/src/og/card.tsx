@@ -1,23 +1,23 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-/** Shared pieces for the social cards: the ink floor, Gambarino, and a paper slip with a torn edge. */
+/** Shared pieces for the social cards: the ink floor, Tanker, and a paper slip with a torn edge. */
 
 export const OG_SIZE = { width: 1200, height: 630 };
 
-export const INK = '#0d1a12';
-export const TEXT = '#eef1ea';
-export const MUTED = '#8fa596';
-export const PAPER = '#f6f3ec';
-export const PAPER_INK = '#1a2419';
-export const PAPER_MUTED = '#5b6a5e';
-export const TONES = { ok: '#2e6a3c', wait: '#7a5d12', bad: '#8e3b33', dim: '#5b6a5e' } as const;
+export const INK = '#101814';
+export const TEXT = '#e4ebe4';
+export const MUTED = '#a3b4a7';
+export const PAPER = '#e4ebe4';
+export const PAPER_INK = '#18251c';
+export const PAPER_MUTED = '#526253';
+export const TONES = { ok: '#2e6a3c', wait: '#7a5d12', bad: '#8e3b33', dim: '#526253' } as const;
 
 let fontCache: Promise<Buffer> | null = null;
 
 export function displayFont() {
   if (!fontCache) {
-    fontCache = readFile(join(process.cwd(), 'src/og/gambarino-regular.ttf')).catch((err) => {
+    fontCache = readFile(join(process.cwd(), 'src/og/tanker-regular.ttf')).catch((err) => {
       fontCache = null;
       throw err;
     });
@@ -27,7 +27,14 @@ export function displayFont() {
 
 export async function ogFonts() {
   try {
-    return [{ name: 'Gambarino', data: await displayFont(), weight: 400 as const, style: 'normal' as const }];
+    const [display, body] = await Promise.all([
+      displayFont(),
+      readFile(join(process.cwd(), 'node_modules/next/dist/compiled/@vercel/og/noto-sans-v27-latin-regular.ttf')),
+    ]);
+    return [
+      { name: 'Noto Sans', data: body, weight: 400 as const, style: 'normal' as const },
+      { name: 'Tanker', data: display, weight: 400 as const, style: 'normal' as const },
+    ];
   } catch {
     return [];
   }
