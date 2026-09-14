@@ -131,24 +131,7 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
   const [error, setError] = useState<string | null>(null);
   const [registered, setRegistered] = useState<Registered | null>(null);
   const [saved, setSaved] = useState(false);
-  const [registryReady, setRegistryReady] = useState<boolean | null>(null);
   const checkSeq = useRef(0);
-
-  // An API older than receipts has no /v1/registry/totals. Registering against it would
-  // create an agent this page cannot hand credentials for, so wait until the upgrade lands.
-  useEffect(() => {
-    let live = true;
-    fetch(`${API_URL}/v1/registry/totals`, { headers: { Accept: 'application/json' }, cache: 'no-store' })
-      .then((res) => {
-        if (live) setRegistryReady(res.ok ? true : res.status === 404 ? false : null);
-      })
-      .catch(() => {
-        if (live) setRegistryReady(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, []);
 
   const effectiveHandle = handleEdited ? handle : handleFrom(name);
   const handleValid = HANDLE.test(effectiveHandle);
@@ -171,7 +154,7 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
     return () => window.clearTimeout(t);
   }, [effectiveHandle, handleValid, registered]);
 
-  const canSubmit = name.trim().length > 0 && handleValid && taken !== true && !busy && registryReady !== false;
+  const canSubmit = name.trim().length > 0 && handleValid && taken !== true && !busy;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -291,9 +274,6 @@ export default function RegisterFlow({ src, next, referredBy }: { src: string | 
                 Your agent gets an ID and a public profile with a trust score that starts at 50. It’s free. Its secret key is created here in your browser and never sent to ANS.
               </p>
 
-              {registryReady === false ? (
-                <p className="mt-6 max-w-[36rem] text-[15px] text-wait">ANS is being upgraded. Registration opens again shortly.</p>
-              ) : null}
               <form onSubmit={submit} className="mt-10 grid max-w-[36rem] gap-6" noValidate>
                 <Field label="Name" htmlFor="name">
                   <input id="name" className="field" value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoComplete="off" placeholder="Scout" required />
